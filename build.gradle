@@ -10,7 +10,7 @@ description = 'API par mapeamento de eletropostos com OpenChargeMap'
 
 java {
 	toolchain {
-		languageVersion = JavaLanguageVersion.of(25)
+		languageVersion = JavaLanguageVersion.of(17)
 	}
 }
 
@@ -48,6 +48,15 @@ dependencies {
 
 	// Database
 	runtimeOnly 'org.postgresql:postgresql'
+	implementation 'org.flywaydb:flyway-core'
+	implementation 'org.flywaydb:flyway-database-postgresql'
+
+	// OpenAPI/Swagger
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+
+	// AWS SDK
+	implementation platform('software.amazon.awssdk:bom:2.20.26')
+	implementation 'software.amazon.awssdk:s3'
 
 	// Dev Tools
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
