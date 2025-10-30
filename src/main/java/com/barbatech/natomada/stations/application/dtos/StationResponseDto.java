@@ -1,0 +1,83 @@
+package com.barbatech.natomada.stations.application.dtos;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+/**
+ * DTO for station response
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class StationResponseDto {
+
+    private Long id;
+    private Integer ocmId;
+    private String ocmUuid;
+    private String googlePlaceId;
+    private String externalId;
+    private String name;
+    private String address;
+    private String city;
+    private String state;
+    private String postalCode;
+    private String country;
+    private BigDecimal latitude;
+    private BigDecimal longitude;
+    private String phone;
+    private Boolean isOperational;
+    private Integer totalConnectors;
+    private String connectors; // JSON string
+    private OperatorDto operator;
+    private UsageTypeDto usageType;
+    private String usageCost;
+    private RatingDto rating;
+    private Integer totalReviews;
+    private String openingHours; // JSON string
+    private Boolean isOpen24h;
+    private LocalDateTime lastVerifiedAt;
+    private Boolean isRecentlyVerified;
+    private LocalDateTime lastSyncAt;
+    private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class OperatorDto {
+        private String name;
+        private String website;
+        private String phone;
+        private String email;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class UsageTypeDto {
+        private String title;
+        private Boolean requiresMembership;
+        private Boolean payAtLocation;
+        private Boolean requiresAccessKey;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class RatingDto {
+        private BigDecimal ocm;
+        private Integer ocmCount;
+        private BigDecimal google;
+        private Integer googleCount;
+        private BigDecimal combined;
+    }
+}
