@@ -54,6 +54,9 @@ class AuthServiceTest {
     @Mock
     private JwtProperties jwtProperties;
 
+    @Mock
+    private com.barbatech.natomada.infrastructure.kafka.EventPublisher eventPublisher;
+
     @InjectMocks
     private AuthService authService;
 
