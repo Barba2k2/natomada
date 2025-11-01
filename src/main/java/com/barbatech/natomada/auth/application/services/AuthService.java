@@ -8,6 +8,10 @@ import com.barbatech.natomada.auth.infrastructure.config.JwtProperties;
 import com.barbatech.natomada.auth.infrastructure.repositories.RefreshTokenRepository;
 import com.barbatech.natomada.auth.infrastructure.repositories.UserRepository;
 import com.barbatech.natomada.auth.infrastructure.security.JwtUtil;
+import com.barbatech.natomada.infrastructure.events.auth.UserLoggedInEvent;
+import com.barbatech.natomada.infrastructure.events.auth.UserLoggedOutEvent;
+import com.barbatech.natomada.infrastructure.events.auth.UserRegisteredEvent;
+import com.barbatech.natomada.infrastructure.kafka.EventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -29,6 +33,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final JwtProperties jwtProperties;
+    private final EventPublisher eventPublisher;
 
     /**
      * Register a new user
@@ -63,6 +68,16 @@ public class AuthService {
         userRepository.save(user);
 
         log.info("User registered successfully with ID: {}", user.getId());
+
+        // Publish USER_REGISTERED event
+        UserRegisteredEvent event = UserRegisteredEvent.of(
+            user.getId(),
+            user.getName(),
+            user.getEmail(),
+            user.getPhone()
+        );
+        eventPublisher.publish("natomada.auth.events", event);
+
         return MessageResponseDto.of("Cadastro realizado com sucesso! Faça login para continuar.");
     }
 
@@ -100,6 +115,15 @@ public class AuthService {
 
         log.info("User logged in successfully: {}", user.getId());
 
+        // Publish USER_LOGGED_IN event
+        UserLoggedInEvent loginEvent = UserLoggedInEvent.of(
+            user.getId(),
+            user.getEmail(),
+            "unknown", // TODO: Get from HttpServletRequest
+            "unknown"  // TODO: Get from HttpServletRequest
+        );
+        eventPublisher.publish("natomada.auth.events", loginEvent);
+
         return LoginResponseDto.builder()
             .accessToken(accessToken)
             .refreshToken(refreshTokenStr)
@@ -117,6 +141,10 @@ public class AuthService {
         log.info("User {} logging out", userId);
 
         refreshTokenRepository.deleteAllByUserId(userId);
+
+        // Publish USER_LOGGED_OUT event
+        UserLoggedOutEvent logoutEvent = UserLoggedOutEvent.of(userId);
+        eventPublisher.publish("natomada.auth.events", logoutEvent);
 
         return MessageResponseDto.of("Logout realizado com sucesso");
     }
