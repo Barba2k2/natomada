@@ -148,6 +148,22 @@ services:
       retries: 3
       start_period: 60s
 
+  # Kafka UI (optional - for monitoring)
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: natomada-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      - kafka
+    environment:
+      KAFKA_CLUSTERS_0_NAME: natomada-cluster
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    ports:
+      - "127.0.0.1:8090:8080"
+    networks:
+      - natomada-network
+
   # Loki - Log Aggregation
   loki:
     image: grafana/loki:2.9.0
