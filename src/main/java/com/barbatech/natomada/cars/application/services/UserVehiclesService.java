@@ -12,6 +12,9 @@ import com.barbatech.natomada.cars.domain.entities.Car;
 import com.barbatech.natomada.cars.domain.entities.UserVehicle;
 import com.barbatech.natomada.cars.infrastructure.repositories.CarRepository;
 import com.barbatech.natomada.cars.infrastructure.repositories.UserVehicleRepository;
+import com.barbatech.natomada.infrastructure.events.cars.VehicleAddedEvent;
+import com.barbatech.natomada.infrastructure.events.cars.VehicleRemovedEvent;
+import com.barbatech.natomada.infrastructure.kafka.EventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +34,7 @@ public class UserVehiclesService {
     private final UserVehicleRepository userVehicleRepository;
     private final CarRepository carRepository;
     private final UserRepository userRepository;
+    private final EventPublisher eventPublisher;
 
     /**
      * Add vehicle to user account
@@ -73,6 +77,17 @@ public class UserVehiclesService {
         userVehicleRepository.save(userVehicle);
 
         log.info("Vehicle added successfully for user {}", userId);
+
+        // Publish VEHICLE_ADDED event
+        VehicleAddedEvent event = VehicleAddedEvent.of(
+            userId,
+            userVehicle.getId(),
+            car.getId(),
+            car.getBrand() + " " + car.getModel(),
+            dto.getNickname(),
+            dto.getColor()
+        );
+        eventPublisher.publish("natomada.vehicles.events", event);
 
         return MessageResponseDto.builder()
             .message("Veículo adicionado com sucesso")
@@ -134,6 +149,7 @@ public class UserVehiclesService {
             .orElseThrow(() -> new IllegalArgumentException("Veículo não encontrado"));
 
         boolean wasPrimary = vehicle.getIsPrimary();
+        Long carId = vehicle.getCar().getId();
 
         userVehicleRepository.delete(vehicle);
 
@@ -146,6 +162,10 @@ public class UserVehiclesService {
         }
 
         log.info("Vehicle {} deleted successfully", id);
+
+        // Publish VEHICLE_REMOVED event
+        VehicleRemovedEvent event = VehicleRemovedEvent.of(userId, id, carId);
+        eventPublisher.publish("natomada.vehicles.events", event);
 
         return MessageResponseDto.builder()
             .message("Veículo removido com sucesso")
