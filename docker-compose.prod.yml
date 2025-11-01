@@ -91,7 +91,7 @@ services:
 
   # Spring Boot Application
   app:
-    image: ghcr.io/${GITHUB_REPOSITORY:-barba2k2/natomada}:latest
+    image: ghcr.io/barba2k2/natomada:latest
     container_name: natomada-app
     restart: unless-stopped
     depends_on:
