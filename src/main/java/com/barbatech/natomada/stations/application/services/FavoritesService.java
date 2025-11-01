@@ -10,6 +10,9 @@ import com.barbatech.natomada.stations.domain.entities.Favorite;
 import com.barbatech.natomada.stations.domain.entities.Station;
 import com.barbatech.natomada.stations.infrastructure.repositories.FavoriteRepository;
 import com.barbatech.natomada.stations.infrastructure.repositories.StationRepository;
+import com.barbatech.natomada.infrastructure.events.stations.StationFavoritedEvent;
+import com.barbatech.natomada.infrastructure.events.stations.StationUnfavoritedEvent;
+import com.barbatech.natomada.infrastructure.kafka.EventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +32,7 @@ public class FavoritesService {
     private final FavoriteRepository favoriteRepository;
     private final StationRepository stationRepository;
     private final UserRepository userRepository;
+    private final EventPublisher eventPublisher;
 
     /**
      * Get all favorites for a user
@@ -77,6 +81,15 @@ public class FavoritesService {
 
         log.info("Station {} added to favorites for user {}", stationId, userId);
 
+        // Publish STATION_FAVORITED event
+        StationFavoritedEvent event = StationFavoritedEvent.of(
+            userId,
+            stationId,
+            station.getName(),
+            station.getAddress()
+        );
+        eventPublisher.publish("natomada.stations.events", event);
+
         return MessageResponseDto.builder()
             .message("Estação adicionada aos favoritos")
             .build();
@@ -97,6 +110,10 @@ public class FavoritesService {
         favoriteRepository.deleteByUserIdAndStationId(userId, stationId);
 
         log.info("Station {} removed from favorites for user {}", stationId, userId);
+
+        // Publish STATION_UNFAVORITED event
+        StationUnfavoritedEvent event = StationUnfavoritedEvent.of(userId, stationId);
+        eventPublisher.publish("natomada.stations.events", event);
 
         return MessageResponseDto.builder()
             .message("Estação removida dos favoritos")
