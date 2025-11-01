@@ -1,7 +1,7 @@
 # Multi-stage build for Spring Boot application
 
 # Stage 1: Build
-FROM gradle:8.5-jdk21 AS build
+FROM gradle:8-jdk21 AS build
 WORKDIR /app
 
 # Copy gradle files
