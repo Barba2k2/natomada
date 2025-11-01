@@ -1,9 +1,7 @@
 package com.barbatech.natomada.stations.presentation.controllers;
 
-import com.barbatech.natomada.stations.application.dtos.GetNearbyStationsRequestDto;
 import com.barbatech.natomada.stations.application.dtos.StationResponseDto;
 import com.barbatech.natomada.stations.application.services.StationsService;
-import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
