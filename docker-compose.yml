@@ -20,6 +20,25 @@ services:
       timeout: 5s
       retries: 5
 
+  # pgAdmin - PostgreSQL Management UI
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: natomada-pgadmin
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@natomada.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - natomada-network
+
   # Redis Cache/Session Store
   redis:
     image: redis:7-alpine
@@ -126,6 +145,12 @@ services:
       SPRING_KAFKA_CONSUMER_GROUP_ID: ${KAFKA_CONSUMER_GROUP:-natomada-group}
       SPRING_KAFKA_CONSUMER_AUTO_OFFSET_RESET: earliest
 
+      # AWS S3 Configuration
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_S3_BUCKET_NAME: ${AWS_S3_BUCKET_NAME}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+
       # Application Configuration
       SERVER_PORT: 8080
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
@@ -157,13 +182,62 @@ services:
     networks:
       - natomada-network
 
+  # Loki - Log Aggregation
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: natomada-loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - natomada-network
+    volumes:
+      - loki_data:/loki
+
+  # Promtail - Log Collector
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: natomada-promtail
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config/promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - natomada-network
+
+  # Grafana - Metrics & Logs Visualization
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: natomada-grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
+    depends_on:
+      - loki
+    networks:
+      - natomada-network
+
 networks:
   natomada-network:
     driver: bridge
 
 volumes:
   postgres_data:
+  pgadmin_data:
   redis_data:
   zookeeper_data:
   zookeeper_logs:
   kafka_data:
+  loki_data:
+  grafana_data:
