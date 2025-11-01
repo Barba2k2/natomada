@@ -2,7 +2,6 @@ package com.barbatech.natomada.profile.application.services;
 
 import com.barbatech.natomada.auth.application.dtos.MessageResponseDto;
 import com.barbatech.natomada.auth.application.exceptions.UserNotFoundException;
-import com.barbatech.natomada.auth.domain.entities.RefreshToken;
 import com.barbatech.natomada.auth.domain.entities.User;
 import com.barbatech.natomada.auth.infrastructure.repositories.RefreshTokenRepository;
 import com.barbatech.natomada.auth.infrastructure.repositories.UserRepository;
