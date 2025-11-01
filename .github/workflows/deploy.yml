@@ -1,0 +1,470 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+env:
+  DOCKER_IMAGE_NAME: natomada-api
+  DOCKER_REGISTRY: ghcr.io
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run tests
+        run: ./gradlew test --no-daemon
+
+      - name: Build application
+        run: ./gradlew build -x test --no-daemon
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: build/libs/*.jar
+          retention-days: 1
+
+  build-docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build-docker
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup VPS Environment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            echo "=== Setting up VPS Environment ==="
+
+            # Install required packages if not present
+            if ! command -v docker &> /dev/null; then
+              echo "Installing Docker..."
+              curl -fsSL https://get.docker.com -o get-docker.sh
+              sudo sh get-docker.sh
+              sudo usermod -aG docker $USER
+              rm get-docker.sh
+            fi
+
+            if ! command -v docker compose &> /dev/null; then
+              echo "Installing Docker Compose..."
+              sudo apt-get update
+              sudo apt-get install -y docker-compose-plugin
+            fi
+
+            # Create application directory if not exists
+            sudo mkdir -p /opt/natomada
+            sudo chown -R $USER:$USER /opt/natomada
+
+            # Initialize git repo if needed
+            if [ ! -d "/opt/natomada/.git" ]; then
+              echo "Cloning repository..."
+              cd /opt/natomada
+              git clone https://github.com/${{ github.repository }} .
+            fi
+
+            # Create/Update .env file from GitHub Secret
+            echo "Creating .env file from GitHub Secret..."
+            cat > /opt/natomada/.env << 'EOF'
+            ${{ secrets.ENV_FILE }}
+            EOF
+
+            # Add GitHub repository to .env
+            echo "" >> /opt/natomada/.env
+            echo "# GitHub" >> /opt/natomada/.env
+            echo "GITHUB_REPOSITORY=${{ github.repository }}" >> /opt/natomada/.env
+
+            echo ".env file created successfully!"
+
+            # Create backup directory
+            sudo mkdir -p /opt/natomada/backups
+            sudo chown -R $USER:$USER /opt/natomada/backups
+
+            echo "VPS environment setup completed!"
+
+      - name: Backup Current State
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            echo "=== Creating Backup ==="
+            cd /opt/natomada
+
+            BACKUP_DIR="/opt/natomada/backups"
+            TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+            BACKUP_FILE="backup_${TIMESTAMP}.tar.gz"
+
+            # Backup database
+            if docker compose ps postgres | grep -q "Up"; then
+              echo "Backing up database..."
+              docker compose exec -T postgres pg_dump -U postgres natomada > "${BACKUP_DIR}/db_${TIMESTAMP}.sql"
+              gzip "${BACKUP_DIR}/db_${TIMESTAMP}.sql"
+            fi
+
+            # Save current docker image tag for rollback
+            CURRENT_IMAGE=$(docker inspect natomada-app --format='{{.Config.Image}}' 2>/dev/null || echo "none")
+            echo "${CURRENT_IMAGE}" > "${BACKUP_DIR}/image_${TIMESTAMP}.txt"
+
+            # Keep only last 5 backups
+            cd "${BACKUP_DIR}"
+            ls -t db_*.sql.gz 2>/dev/null | tail -n +6 | xargs -r rm
+            ls -t image_*.txt 2>/dev/null | tail -n +6 | xargs -r rm
+
+            echo "Backup completed: ${BACKUP_FILE}"
+            echo "Current image: ${CURRENT_IMAGE}"
+
+      - name: Pre-deployment Checks
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            echo "=== Pre-deployment Checks ==="
+            cd /opt/natomada
+
+            # Check disk space
+            DISK_USAGE=$(df -h /opt | tail -1 | awk '{print $5}' | sed 's/%//')
+            if [ "$DISK_USAGE" -gt 90 ]; then
+              echo "WARNING: Disk usage is at ${DISK_USAGE}%"
+              echo "Cleaning up Docker resources..."
+              docker system prune -af --volumes --filter "until=72h"
+            fi
+
+            # Check if .env exists and has required variables
+            if [ ! -f ".env" ]; then
+              echo "ERROR: .env file not found!"
+              exit 1
+            fi
+
+            # Verify essential env vars
+            source .env
+            REQUIRED_VARS="POSTGRES_PASSWORD REDIS_PASSWORD JWT_SECRET"
+            for var in $REQUIRED_VARS; do
+              if [ -z "${!var}" ] || [ "${!var}" = "CHANGE_ME" ]; then
+                echo "ERROR: Required variable $var is not set or has default value!"
+                exit 1
+              fi
+            done
+
+            # Check Docker daemon
+            if ! docker info > /dev/null 2>&1; then
+              echo "ERROR: Docker is not running!"
+              exit 1
+            fi
+
+            echo "All pre-deployment checks passed!"
+
+      - name: Deploy Application
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            echo "=== Deploying Application ==="
+            cd /opt/natomada
+
+            # Pull latest code
+            echo "Pulling latest code..."
+            git fetch origin
+            git reset --hard origin/master
+
+            # Log in to GitHub Container Registry
+            echo "Logging in to GitHub Container Registry..."
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ${{ env.DOCKER_REGISTRY }} -u ${{ github.actor }} --password-stdin
+
+            # Pull latest images
+            echo "Pulling latest Docker images..."
+            docker compose -f docker-compose.prod.yml pull
+
+            # Start/Update infrastructure services first
+            echo "Starting infrastructure services..."
+            docker compose -f docker-compose.prod.yml up -d postgres redis zookeeper kafka loki promtail grafana
+
+            # Wait for infrastructure to be healthy
+            echo "Waiting for infrastructure services..."
+            sleep 15
+
+            # Check if database needs initialization
+            DB_EXISTS=$(docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -lqt | cut -d \| -f 1 | grep -w natomada | wc -l)
+            if [ "$DB_EXISTS" -eq 0 ]; then
+              echo "Creating database..."
+              docker compose -f docker-compose.prod.yml exec -T postgres createdb -U postgres natomada
+            fi
+
+            # Deploy application with zero-downtime strategy
+            echo "Deploying application..."
+            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate app
+
+            echo "Waiting for application startup..."
+            sleep 20
+
+            # Show container status
+            docker compose -f docker-compose.prod.yml ps
+
+      - name: Run Database Migrations
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            echo "=== Running Database Migrations ==="
+            cd /opt/natomada
+
+            # Flyway migrations run automatically on Spring Boot startup
+            # This step just monitors the logs for migration status
+
+            echo "Checking migration logs..."
+            docker compose -f docker-compose.prod.yml logs app | grep -i "flyway\|migration" || echo "No migration logs found (migrations may run later)"
+
+            echo "Database migrations check completed!"
+
+      - name: Health Check and Verification
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            echo "=== Health Check and Verification ==="
+            cd /opt/natomada
+
+            # Wait for application to be healthy
+            max_attempts=40
+            attempt=0
+
+            while [ $attempt -lt $max_attempts ]; do
+              attempt=$((attempt+1))
+
+              # Check if container is running
+              if ! docker compose -f docker-compose.prod.yml ps app | grep -q "Up"; then
+                echo "Container is not running! (attempt $attempt/$max_attempts)"
+                sleep 5
+                continue
+              fi
+
+              # Check health endpoint
+              if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
+                echo "✓ Application is healthy!"
+
+                # Get detailed health info
+                echo "Health details:"
+                curl -s http://localhost:8080/actuator/health | jq '.' || curl -s http://localhost:8080/actuator/health
+
+                # Check database connection
+                echo "Checking database connectivity..."
+                docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U postgres
+
+                # Check Redis connection
+                echo "Checking Redis connectivity..."
+                docker compose -f docker-compose.prod.yml exec -T redis redis-cli -a "${REDIS_PASSWORD}" ping
+
+                # Show application logs (last 20 lines)
+                echo "Recent application logs:"
+                docker compose -f docker-compose.prod.yml logs --tail=20 app
+
+                exit 0
+              fi
+
+              echo "Waiting for application to be healthy... (attempt $attempt/$max_attempts)"
+              sleep 5
+            done
+
+            # Health check failed
+            echo "❌ Application failed to become healthy!"
+            echo "Container status:"
+            docker compose -f docker-compose.prod.yml ps
+            echo ""
+            echo "Application logs (last 100 lines):"
+            docker compose -f docker-compose.prod.yml logs --tail=100 app
+            echo ""
+            echo "System resources:"
+            docker stats --no-stream
+
+            exit 1
+
+      - name: Cleanup Resources
+        if: success()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            echo "=== Cleaning Up Resources ==="
+            cd /opt/natomada
+
+            # Remove old Docker images (keep last 3)
+            echo "Removing old Docker images..."
+            docker images | grep natomada | tail -n +4 | awk '{print $3}' | xargs -r docker rmi -f || true
+
+            # Clean up dangling images and stopped containers
+            docker image prune -f
+            docker container prune -f
+
+            # Clean up old build cache
+            docker builder prune -f --filter "until=48h"
+
+            # Show disk usage
+            echo "Disk usage after cleanup:"
+            df -h /opt
+
+            echo "Cleanup completed!"
+
+      - name: Rollback on Failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            echo "=== ROLLBACK: Deployment Failed ==="
+            cd /opt/natomada
+
+            BACKUP_DIR="/opt/natomada/backups"
+
+            # Get last backup image
+            LAST_IMAGE_FILE=$(ls -t ${BACKUP_DIR}/image_*.txt 2>/dev/null | head -1)
+
+            if [ -f "$LAST_IMAGE_FILE" ]; then
+              PREVIOUS_IMAGE=$(cat "$LAST_IMAGE_FILE")
+
+              if [ "$PREVIOUS_IMAGE" != "none" ] && [ -n "$PREVIOUS_IMAGE" ]; then
+                echo "Rolling back to previous image: ${PREVIOUS_IMAGE}"
+
+                # Update docker-compose to use previous image
+                export ROLLBACK_IMAGE="${PREVIOUS_IMAGE}"
+
+                # Stop current app
+                docker compose -f docker-compose.prod.yml stop app
+
+                # Start with previous image
+                docker run -d \
+                  --name natomada-app \
+                  --network natomada-network \
+                  --env-file .env \
+                  -p 8080:8080 \
+                  "${PREVIOUS_IMAGE}"
+
+                echo "Rollback completed!"
+
+                # Check if rollback was successful
+                sleep 10
+                if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
+                  echo "✓ Rollback successful! Application is healthy."
+                else
+                  echo "❌ Rollback failed! Manual intervention required."
+                fi
+              else
+                echo "No previous image found for rollback"
+              fi
+            else
+              echo "No backup found for rollback"
+            fi
+
+            # Show current status
+            echo "Current container status:"
+            docker ps -a | grep natomada
+
+            # Show recent logs
+            echo "Recent logs:"
+            docker logs --tail=50 natomada-app 2>&1 || docker compose -f docker-compose.prod.yml logs --tail=50 app
+
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: always()
+
+    steps:
+      - name: Deployment Success
+        if: needs.deploy.result == 'success'
+        run: |
+          echo "Deployment successful!"
+          # Add notification logic here (Slack, Discord, Email, etc)
+
+      - name: Deployment Failed
+        if: needs.deploy.result != 'success'
+        run: |
+          echo "Deployment failed!"
+          # Add notification logic here (Slack, Discord, Email, etc)
+          exit 1
