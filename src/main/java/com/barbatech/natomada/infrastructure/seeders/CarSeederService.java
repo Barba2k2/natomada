@@ -59,6 +59,14 @@ public class CarSeederService {
             return;
         }
 
+        // Check if CSV file exists
+        Path csvFile = Paths.get(csvPath);
+        if (!Files.exists(csvFile)) {
+            log.warn("⚠️ CSV file not found at: {}. Skipping car seeding.", csvPath);
+            log.info("ℹ️ To seed cars, ensure the CSV file exists or configure app.seeder.csv-path");
+            return;
+        }
+
         try {
             // Load image mappings
             Map<String, String> imageMap = loadImageMappings();
@@ -74,7 +82,8 @@ public class CarSeederService {
 
         } catch (Exception e) {
             log.error("❌ Error seeding cars: {}", e.getMessage(), e);
-            throw new RuntimeException("Failed to seed cars", e);
+            log.warn("⚠️ Car seeding failed, but application will continue to start");
+            // Don't throw exception - allow application to start even if seeding fails
         }
     }
 
@@ -166,10 +175,6 @@ public class CarSeederService {
     private List<Car> readCarsFromCSV(Map<String, String> imageMap) throws Exception {
         List<Car> cars = new ArrayList<>();
         Path csvFile = Paths.get(csvPath);
-
-        if (!Files.exists(csvFile)) {
-            throw new RuntimeException("CSV file not found: " + csvPath);
-        }
 
         try (BufferedReader reader = Files.newBufferedReader(csvFile)) {
             String line;
