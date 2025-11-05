@@ -1,0 +1,950 @@
+{
+	"info": {
+		"_postman_id": "natomada-api-collection",
+		"name": "NaTomada API",
+		"description": "API para o aplicativo NaTomada - Mapeamento e gerenciamento de estações de recarga para veículos elétricos",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{accessToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    console.log('User registered successfully');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Password123!\",\n  \"name\": \"João Silva\",\n  \"phone\": \"+5511999999999\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/register",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"register"
+							]
+						},
+						"description": "Registra um novo usuário no sistema"
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set('accessToken', jsonData.accessToken);",
+									"    pm.environment.set('refreshToken', jsonData.refreshToken);",
+									"    console.log('Tokens saved to environment');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Password123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/login",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Autentica um usuário e retorna tokens de acesso e refresh"
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set('accessToken', jsonData.accessToken);",
+									"    pm.environment.set('refreshToken', jsonData.refreshToken);",
+									"    console.log('Tokens refreshed');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/refresh-token",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"refresh-token"
+							]
+						},
+						"description": "Gera um novo access token usando o refresh token"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"me"
+							]
+						},
+						"description": "Retorna as informações do usuário atualmente autenticado"
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    pm.environment.unset('accessToken');",
+									"    pm.environment.unset('refreshToken');",
+									"    console.log('Logged out, tokens cleared');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/logout",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"logout"
+							]
+						},
+						"description": "Invalida o refresh token do usuário autenticado"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para autenticação e gerenciamento de usuários"
+		},
+		{
+			"name": "Profile & Settings",
+			"item": [
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/profile",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"profile"
+							]
+						},
+						"description": "Retorna os dados do perfil do usuário autenticado"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"João Silva Santos\",\n  \"phone\": \"+5511988888888\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/profile",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"profile"
+							]
+						},
+						"description": "Atualiza os dados do perfil do usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Change Password",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"currentPassword\": \"Password123!\",\n  \"newPassword\": \"NewPassword123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/profile/password",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"profile",
+								"password"
+							]
+						},
+						"description": "Altera a senha do usuário autenticado"
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Avatar",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/profile/avatar",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"profile",
+								"avatar"
+							]
+						},
+						"description": "Faz upload da foto de perfil do usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Avatar",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/profile/avatar",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"profile",
+								"avatar"
+							]
+						},
+						"description": "Remove a foto de perfil do usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Settings",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/settings",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"settings"
+							]
+						},
+						"description": "Retorna as configurações do usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Settings",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"language\": \"pt_BR\",\n  \"notificationsEnabled\": true,\n  \"emailNotifications\": true,\n  \"pushNotifications\": true,\n  \"theme\": \"dark\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/settings",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"settings"
+							]
+						},
+						"description": "Atualiza as configurações do usuário"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para gerenciamento de perfil e configurações do usuário"
+		},
+		{
+			"name": "Stations",
+			"item": [
+				{
+					"name": "Get Nearby Stations",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/stations/nearby?latitude=-23.5629&longitude=-46.6544&radius=5000&limit=20",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"stations",
+								"nearby"
+							],
+							"query": [
+								{
+									"key": "latitude",
+									"value": "-23.5629",
+									"description": "Latitude (São Paulo exemplo)"
+								},
+								{
+									"key": "longitude",
+									"value": "-46.6544",
+									"description": "Longitude (São Paulo exemplo)"
+								},
+								{
+									"key": "radius",
+									"value": "5000",
+									"description": "Raio em metros (opcional, padrão: 5000)"
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"description": "Limite de resultados (opcional, padrão: 20)"
+								}
+							]
+						},
+						"description": "Retorna estações de recarga próximas a uma localização específica"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para busca e consulta de estações de recarga"
+		},
+		{
+			"name": "Favorites",
+			"item": [
+				{
+					"name": "Get User Favorites",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/stations/favorites",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"stations",
+								"favorites"
+							]
+						},
+						"description": "Retorna todas as estações favoritas do usuário autenticado"
+					},
+					"response": []
+				},
+				{
+					"name": "Add Favorite",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"notes\": \"Estação próxima ao trabalho\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/stations/:stationId/favorite",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"stations",
+								":stationId",
+								"favorite"
+							],
+							"variable": [
+								{
+									"key": "stationId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Adiciona uma estação aos favoritos do usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Favorite",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/stations/:stationId/unfavorite",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"stations",
+								":stationId",
+								"unfavorite"
+							],
+							"variable": [
+								{
+									"key": "stationId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Remove uma estação dos favoritos do usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Check if Favorite",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/stations/:stationId/is-favorite",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"stations",
+								":stationId",
+								"is-favorite"
+							],
+							"variable": [
+								{
+									"key": "stationId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Verifica se uma estação está nos favoritos do usuário"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para gerenciamento de estações favoritas do usuário"
+		},
+		{
+			"name": "Cars Catalog",
+			"item": [
+				{
+					"name": "List Cars",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept-Language",
+								"value": "pt_BR",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/cars?page=1&limit=20&sortBy=brand&sortOrder=asc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cars"
+							],
+							"query": [
+								{
+									"key": "brand",
+									"value": "Tesla",
+									"description": "Filtrar por marca",
+									"disabled": true
+								},
+								{
+									"key": "bodyType",
+									"value": "SUV",
+									"description": "Filtrar por tipo de carroceria",
+									"disabled": true
+								},
+								{
+									"key": "search",
+									"value": "Model 3",
+									"description": "Busca por nome",
+									"disabled": true
+								},
+								{
+									"key": "minPower",
+									"value": "300",
+									"description": "Potência mínima em kW",
+									"disabled": true
+								},
+								{
+									"key": "connector",
+									"value": "CCS",
+									"description": "Tipo de conector",
+									"disabled": true
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "sortBy",
+									"value": "brand",
+									"description": "brand, model, year, power"
+								},
+								{
+									"key": "sortOrder",
+									"value": "asc",
+									"description": "asc ou desc"
+								}
+							]
+						},
+						"description": "Retorna catálogo de veículos elétricos com filtros, paginação e ordenação"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Car by ID",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept-Language",
+								"value": "pt_BR",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/cars/:carId",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cars",
+								":carId"
+							],
+							"variable": [
+								{
+									"key": "carId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Retorna detalhes de um veículo específico"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Brands",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/cars/brands",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cars",
+								"brands"
+							]
+						},
+						"description": "Retorna lista de todas as marcas disponíveis"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Body Types",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept-Language",
+								"value": "pt_BR",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/cars/body-types",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cars",
+								"body-types"
+							]
+						},
+						"description": "Retorna lista de tipos de carroceria disponíveis"
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Car Image (Admin)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/cars/:carId/image",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"cars",
+								":carId",
+								"image"
+							],
+							"variable": [
+								{
+									"key": "carId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Upload de imagem para um veículo (operação administrativa)"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints públicos para catálogo de veículos elétricos"
+		},
+		{
+			"name": "User Vehicles",
+			"item": [
+				{
+					"name": "Get User Vehicles",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept-Language",
+								"value": "pt_BR",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/user-vehicles",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"user-vehicles"
+							]
+						},
+						"description": "Retorna todos os veículos cadastrados pelo usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Add User Vehicle",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"carId\": 1,\n  \"nickname\": \"Meu Tesla\",\n  \"isPrimary\": true\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/user-vehicles",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"user-vehicles"
+							]
+						},
+						"description": "Adiciona um veículo à conta do usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Update User Vehicle",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"nickname\": \"Tesla Model 3 Branco\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/user-vehicles/:vehicleId",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"user-vehicles",
+								":vehicleId"
+							],
+							"variable": [
+								{
+									"key": "vehicleId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Atualiza informações de um veículo do usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Set Primary Vehicle",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/user-vehicles/:vehicleId/primary",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"user-vehicles",
+								":vehicleId",
+								"primary"
+							],
+							"variable": [
+								{
+									"key": "vehicleId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Define um veículo como principal do usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete User Vehicle",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/user-vehicles/:vehicleId",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"user-vehicles",
+								":vehicleId"
+							],
+							"variable": [
+								{
+									"key": "vehicleId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Remove um veículo da conta do usuário"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para gerenciamento de veículos do usuário"
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		}
+	]
+}
