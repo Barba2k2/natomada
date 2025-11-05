@@ -2,6 +2,11 @@ package com.barbatech.natomada.stations.presentation.controllers;
 
 import com.barbatech.natomada.stations.application.dtos.StationResponseDto;
 import com.barbatech.natomada.stations.application.services.StationsService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -15,6 +20,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/stations")
 @RequiredArgsConstructor
+@Tag(name = "Stations", description = "Endpoints para busca e consulta de estações de recarga")
 public class StationsController {
 
     private final StationsService stationsService;
@@ -23,17 +29,29 @@ public class StationsController {
      * Get nearby stations
      * GET /api/stations/nearby?latitude=-23.5629&longitude=-46.6544&radius=5000&limit=20
      */
+    @Operation(
+        summary = "Buscar estações próximas",
+        description = "Retorna estações de recarga próximas a uma localização específica, com dados do OpenChargeMap enriquecidos com Google Places"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Estações encontradas com sucesso"),
+        @ApiResponse(responseCode = "400", description = "Parâmetros de busca inválidos")
+    })
     @GetMapping("/nearby")
     public ResponseEntity<NearbyStationsResponse> getNearbyStations(
+        @Parameter(description = "Latitude da localização de busca", example = "-23.5629", required = true)
         @RequestParam @NotNull(message = "Latitude é obrigatória")
         @DecimalMin(value = "-90.0") @DecimalMax(value = "90.0") Double latitude,
 
+        @Parameter(description = "Longitude da localização de busca", example = "-46.6544", required = true)
         @RequestParam @NotNull(message = "Longitude é obrigatória")
         @DecimalMin(value = "-180.0") @DecimalMax(value = "180.0") Double longitude,
 
+        @Parameter(description = "Raio de busca em metros", example = "5000")
         @RequestParam(required = false, defaultValue = "5000")
         @Min(value = 100) @Max(value = 50000) Integer radius,
 
+        @Parameter(description = "Limite de resultados", example = "20")
         @RequestParam(required = false, defaultValue = "20")
         @Min(value = 1) @Max(value = 100) Integer limit
     ) {
