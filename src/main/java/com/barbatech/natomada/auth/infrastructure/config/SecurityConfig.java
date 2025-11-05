@@ -37,13 +37,28 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                // Public endpoints
+                // Public endpoints - Swagger/OpenAPI (MUST be first)
+                .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml").permitAll()
+                .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/swagger-resources/**", "/webjars/**").permitAll()
+
+                // Public endpoints - Authentication
                 .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/refresh-token").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/forgot-password").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/validate-reset-token").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/auth/reset-password").permitAll()
+
+                // Public endpoints - Stations (read-only)
+                .requestMatchers(HttpMethod.GET, "/api/stations/nearby").permitAll()
+
+                // Public endpoints - Cars Catalog (read-only)
+                .requestMatchers(HttpMethod.GET, "/api/cars/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/cars/brands").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/cars/body-types").permitAll()
 
                 // Actuator endpoints
-                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/info", "/actuator/**").permitAll()
 
                 // All other requests require authentication
                 .anyRequest().authenticated()

@@ -2,12 +2,15 @@ package com.barbatech.natomada.auth.application.services;
 
 import com.barbatech.natomada.auth.application.dtos.*;
 import com.barbatech.natomada.auth.application.exceptions.*;
+import com.barbatech.natomada.auth.domain.entities.PasswordResetToken;
 import com.barbatech.natomada.auth.domain.entities.RefreshToken;
 import com.barbatech.natomada.auth.domain.entities.User;
 import com.barbatech.natomada.auth.infrastructure.config.JwtProperties;
+import com.barbatech.natomada.auth.infrastructure.repositories.PasswordResetTokenRepository;
 import com.barbatech.natomada.auth.infrastructure.repositories.RefreshTokenRepository;
 import com.barbatech.natomada.auth.infrastructure.repositories.UserRepository;
 import com.barbatech.natomada.auth.infrastructure.security.JwtUtil;
+import com.barbatech.natomada.infrastructure.email.EmailService;
 import com.barbatech.natomada.infrastructure.events.auth.UserLoggedInEvent;
 import com.barbatech.natomada.infrastructure.events.auth.UserLoggedOutEvent;
 import com.barbatech.natomada.infrastructure.events.auth.UserRegisteredEvent;
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * Service for authentication operations
@@ -30,10 +34,12 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final JwtProperties jwtProperties;
     private final EventPublisher eventPublisher;
+    private final EmailService emailService;
 
     /**
      * Register a new user
@@ -193,5 +199,117 @@ public class AuthService {
             .orElseThrow(UserNotFoundException::new);
 
         return UserResponseDto.fromEntity(user);
+    }
+
+    /**
+     * Request password reset - sends email with reset token
+     */
+    @Transactional
+    public MessageResponseDto forgotPassword(ForgotPasswordRequestDto dto) {
+        log.info("Password reset requested for email: {}", dto.getEmail());
+
+        // Find user by email
+        User user = userRepository.findByEmail(dto.getEmail())
+            .orElseThrow(UserNotFoundException::new);
+
+        // Delete any existing password reset tokens for this user
+        passwordResetTokenRepository.deleteByUser(user);
+
+        // Generate unique reset token
+        String token = UUID.randomUUID().toString();
+
+        // Create password reset token (expires in 1 hour)
+        LocalDateTime expiresAt = LocalDateTime.now().plusHours(1);
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .token(token)
+            .email(user.getEmail())
+            .user(user)
+            .expiresAt(expiresAt)
+            .build();
+
+        passwordResetTokenRepository.save(resetToken);
+
+        // Send password reset email
+        try {
+            emailService.sendPasswordResetEmail(user.getEmail(), token, user.getName());
+            log.info("Password reset email sent to: {}", user.getEmail());
+        } catch (Exception e) {
+            log.error("Failed to send password reset email", e);
+            throw new RuntimeException("Falha ao enviar email de redefinição de senha");
+        }
+
+        return MessageResponseDto.of("Email de redefinição de senha enviado com sucesso");
+    }
+
+    /**
+     * Validate password reset token
+     */
+    public MessageResponseDto validateResetToken(String token) {
+        log.info("Validating password reset token");
+
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
+            .orElseThrow(() -> new InvalidTokenException("Token inválido"));
+
+        if (!resetToken.isValid()) {
+            if (resetToken.isUsed()) {
+                throw new InvalidTokenException("Token já foi utilizado");
+            }
+            if (resetToken.isExpired()) {
+                throw new InvalidTokenException("Token expirado");
+            }
+        }
+
+        return MessageResponseDto.of("Token válido");
+    }
+
+    /**
+     * Reset password using token
+     */
+    @Transactional
+    public MessageResponseDto resetPassword(ResetPasswordRequestDto dto) {
+        log.info("Resetting password with token");
+
+        // Validate password confirmation
+        if (!dto.getNewPassword().equals(dto.getNewPasswordConfirmation())) {
+            throw new PasswordMismatchException();
+        }
+
+        // Find and validate token
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(dto.getToken())
+            .orElseThrow(() -> new InvalidTokenException("Token inválido"));
+
+        if (!resetToken.isValid()) {
+            if (resetToken.isUsed()) {
+                throw new InvalidTokenException("Token já foi utilizado");
+            }
+            if (resetToken.isExpired()) {
+                throw new InvalidTokenException("Token expirado");
+            }
+        }
+
+        // Get user and update password
+        User user = resetToken.getUser();
+        user.setPassword(passwordEncoder.encode(dto.getNewPassword()));
+        userRepository.save(user);
+
+        // Mark token as used
+        resetToken.markAsUsed();
+        passwordResetTokenRepository.save(resetToken);
+
+        // Invalidate all refresh tokens for security
+        refreshTokenRepository.deleteAllByUserId(user.getId());
+
+        log.info("Password reset successfully for user: {}", user.getId());
+
+        return MessageResponseDto.of("Senha redefinida com sucesso");
+    }
+
+    /**
+     * Clean up expired password reset tokens (can be scheduled)
+     */
+    @Transactional
+    public void cleanupExpiredResetTokens() {
+        log.info("Cleaning up expired password reset tokens");
+        passwordResetTokenRepository.deleteExpiredTokens(LocalDateTime.now());
     }
 }
