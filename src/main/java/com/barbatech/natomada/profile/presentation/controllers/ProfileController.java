@@ -3,6 +3,13 @@ package com.barbatech.natomada.profile.presentation.controllers;
 import com.barbatech.natomada.auth.application.dtos.MessageResponseDto;
 import com.barbatech.natomada.profile.application.dtos.*;
 import com.barbatech.natomada.profile.application.services.ProfileService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
@@ -17,6 +24,8 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
+@Tag(name = "Profile & Settings", description = "Endpoints para gerenciamento de perfil e configurações do usuário")
+@SecurityRequirement(name = "bearerAuth")
 public class ProfileController {
 
     private final ProfileService profileService;
@@ -25,6 +34,11 @@ public class ProfileController {
      * Get user profile
      * GET /api/profile
      */
+    @Operation(summary = "Obter perfil do usuário", description = "Retorna os dados do perfil do usuário autenticado")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Perfil recuperado com sucesso"),
+        @ApiResponse(responseCode = "401", description = "Não autenticado")
+    })
     @GetMapping("/profile")
     public ResponseEntity<ProfileResponse> getProfile(Authentication authentication) {
         Long userId = Long.parseLong(authentication.getName());
@@ -40,6 +54,12 @@ public class ProfileController {
      * Update user profile
      * PUT /api/profile
      */
+    @Operation(summary = "Atualizar perfil", description = "Atualiza os dados do perfil do usuário")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Perfil atualizado com sucesso"),
+        @ApiResponse(responseCode = "400", description = "Dados inválidos"),
+        @ApiResponse(responseCode = "401", description = "Não autenticado")
+    })
     @PutMapping("/profile")
     public ResponseEntity<ProfileUpdateResponse> updateProfile(
         Authentication authentication,
@@ -59,6 +79,12 @@ public class ProfileController {
      * Change user password
      * PUT /api/profile/password
      */
+    @Operation(summary = "Alterar senha", description = "Altera a senha do usuário autenticado")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Senha alterada com sucesso"),
+        @ApiResponse(responseCode = "400", description = "Senha atual incorreta ou nova senha inválida"),
+        @ApiResponse(responseCode = "401", description = "Não autenticado")
+    })
     @PutMapping("/profile/password")
     public ResponseEntity<MessageResponseDto> changePassword(
         Authentication authentication,
@@ -104,6 +130,12 @@ public class ProfileController {
      * Upload user avatar
      * POST /api/profile/avatar
      */
+    @Operation(summary = "Upload de avatar", description = "Faz upload da foto de perfil do usuário")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Avatar enviado com sucesso"),
+        @ApiResponse(responseCode = "400", description = "Arquivo inválido"),
+        @ApiResponse(responseCode = "401", description = "Não autenticado")
+    })
     @PostMapping(value = "/profile/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ProfileResponse> uploadAvatar(
         Authentication authentication,
