@@ -3,6 +3,11 @@ package com.barbatech.natomada.cars.presentation.controllers;
 import com.barbatech.natomada.cars.application.dtos.CarResponseDto;
 import com.barbatech.natomada.cars.application.dtos.ListCarsRequestDto;
 import com.barbatech.natomada.cars.application.services.CarsService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +22,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/cars")
 @RequiredArgsConstructor
+@Tag(name = "Cars Catalog", description = "Endpoints públicos para catálogo de veículos elétricos")
 public class CarsController {
 
     private final CarsService carsService;
@@ -25,6 +31,14 @@ public class CarsController {
      * List cars catalog
      * GET /api/cars
      */
+    @Operation(
+        summary = "Listar veículos",
+        description = "Retorna catálogo de veículos elétricos com filtros, paginação e ordenação"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Lista de veículos recuperada com sucesso"),
+        @ApiResponse(responseCode = "400", description = "Parâmetros de busca inválidos")
+    })
     @GetMapping
     public ResponseEntity<CarsListResponseWrapper> listCars(
         @RequestParam(required = false) String brand,
@@ -70,9 +84,15 @@ public class CarsController {
      * Get car by ID
      * GET /api/cars/{id}
      */
+    @Operation(summary = "Obter veículo por ID", description = "Retorna detalhes de um veículo específico")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Veículo encontrado"),
+        @ApiResponse(responseCode = "404", description = "Veículo não encontrado")
+    })
     @GetMapping("/{id}")
     public ResponseEntity<CarResponseWrapper> getCarById(
-        @PathVariable Long id,
+        @Parameter(description = "ID do veículo", required = true) @PathVariable Long id,
+        @Parameter(description = "Idioma para tradução de campos", example = "pt_BR")
         @RequestHeader(value = "Accept-Language", defaultValue = "en_US") String locale
     ) {
         CarResponseDto car = carsService.getCarById(id, locale);

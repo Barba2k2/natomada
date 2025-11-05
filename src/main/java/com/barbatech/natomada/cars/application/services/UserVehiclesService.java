@@ -197,6 +197,32 @@ public class UserVehiclesService {
     }
 
     /**
+     * Get user vehicle by ID
+     */
+    @Transactional(readOnly = true)
+    public UserVehicleResponseDto getUserVehicleById(Long id, Long userId) {
+        log.info("Getting vehicle {} for user {}", id, userId);
+
+        UserVehicle vehicle = userVehicleRepository.findByIdAndUserId(id, userId)
+            .orElseThrow(() -> new IllegalArgumentException("Veículo não encontrado"));
+
+        return mapToResponse(vehicle);
+    }
+
+    /**
+     * Get primary vehicle for user
+     */
+    @Transactional(readOnly = true)
+    public UserVehicleResponseDto getPrimaryVehicle(Long userId) {
+        log.info("Getting primary vehicle for user {}", userId);
+
+        UserVehicle vehicle = userVehicleRepository.findByUserIdAndIsPrimary(userId, true)
+            .orElseThrow(() -> new IllegalArgumentException("Veículo principal não encontrado. Adicione um veículo primeiro."));
+
+        return mapToResponse(vehicle);
+    }
+
+    /**
      * Map UserVehicle entity to response DTO (includes car with imageUrl)
      */
     private UserVehicleResponseDto mapToResponse(UserVehicle vehicle) {

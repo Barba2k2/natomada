@@ -33,6 +33,14 @@ public interface UserVehicleRepository extends JpaRepository<UserVehicle, Long> 
     Optional<UserVehicle> findByIdAndUserId(@Param("id") Long id, @Param("userId") Long userId);
 
     /**
+     * Find primary vehicle for a user
+     */
+    @Query("SELECT uv FROM UserVehicle uv " +
+           "JOIN FETCH uv.car " +
+           "WHERE uv.user.id = :userId AND uv.isPrimary = :isPrimary")
+    Optional<UserVehicle> findByUserIdAndIsPrimary(@Param("userId") Long userId, @Param("isPrimary") boolean isPrimary);
+
+    /**
      * Find user vehicle by user and car
      */
     @Query("SELECT uv FROM UserVehicle uv " +
