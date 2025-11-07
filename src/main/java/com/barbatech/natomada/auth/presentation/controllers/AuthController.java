@@ -236,12 +236,12 @@ public class AuthController {
     }
 
     /**
-     * Send OTP to phone number
+     * Send OTP via email or SMS
      * POST /api/auth/send-otp
      */
     @Operation(
         summary = "Enviar código OTP",
-        description = "Envia um código OTP de 6 dígitos para o número de telefone fornecido"
+        description = "Envia um código OTP de 6 dígitos via EMAIL ou SMS conforme escolha do usuário"
     )
     @ApiResponses(value = {
         @ApiResponse(
@@ -266,7 +266,7 @@ public class AuthController {
      */
     @Operation(
         summary = "Verificar código OTP",
-        description = "Verifica o código OTP e autentica o usuário se o número estiver cadastrado"
+        description = "Verifica o código OTP (email ou SMS) e autentica o usuário se estiver cadastrado"
     )
     @ApiResponses(value = {
         @ApiResponse(
