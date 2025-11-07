@@ -6,6 +6,7 @@ import com.barbatech.natomada.auth.domain.entities.OtpToken;
 import com.barbatech.natomada.auth.domain.entities.PasswordResetToken;
 import com.barbatech.natomada.auth.domain.entities.RefreshToken;
 import com.barbatech.natomada.auth.domain.entities.User;
+import com.barbatech.natomada.auth.domain.enums.OtpDeliveryMethod;
 import com.barbatech.natomada.auth.infrastructure.config.JwtProperties;
 import com.barbatech.natomada.auth.infrastructure.repositories.OtpTokenRepository;
 import com.barbatech.natomada.auth.infrastructure.repositories.PasswordResetTokenRepository;
@@ -309,15 +310,31 @@ public class AuthService {
     }
 
     /**
-     * Send OTP to phone number
+     * Send OTP via email or SMS
      * Generates a 6-digit code and stores it in database
      */
     @Transactional
     public MessageResponseDto sendOtp(SendOtpRequestDto dto) {
-        log.info("Sending OTP to phone number: {}", dto.getPhoneNumber());
+        String recipient = dto.getDeliveryMethod() == OtpDeliveryMethod.EMAIL
+            ? dto.getEmail()
+            : dto.getPhoneNumber();
 
-        // Delete any existing OTPs for this phone number
-        otpTokenRepository.deleteByPhoneNumber(dto.getPhoneNumber());
+        log.info("Sending OTP via {} to: {}", dto.getDeliveryMethod(), recipient);
+
+        // Validate recipient based on delivery method
+        if (dto.getDeliveryMethod() == OtpDeliveryMethod.EMAIL && (dto.getEmail() == null || dto.getEmail().isBlank())) {
+            throw new IllegalArgumentException("Email é obrigatório para envio via EMAIL");
+        }
+        if (dto.getDeliveryMethod() == OtpDeliveryMethod.SMS && (dto.getPhoneNumber() == null || dto.getPhoneNumber().isBlank())) {
+            throw new IllegalArgumentException("Número de telefone é obrigatório para envio via SMS");
+        }
+
+        // Delete any existing OTPs for this recipient
+        if (dto.getDeliveryMethod() == OtpDeliveryMethod.EMAIL) {
+            otpTokenRepository.deleteByEmail(dto.getEmail());
+        } else {
+            otpTokenRepository.deleteByPhoneNumber(dto.getPhoneNumber());
+        }
 
         // Generate 6-digit OTP code
         String otpCode = generateOtpCode();
@@ -325,34 +342,102 @@ public class AuthService {
         // Create OTP token (expires in 5 minutes)
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(5);
         OtpToken otpToken = OtpToken.builder()
+            .deliveryMethod(dto.getDeliveryMethod())
             .phoneNumber(dto.getPhoneNumber())
+            .email(dto.getEmail())
             .code(otpCode)
             .expiresAt(expiresAt)
             .build();
 
         otpTokenRepository.save(otpToken);
 
-        // TODO: Integrate with SMS service (Twilio, AWS SNS, etc.) to send the OTP code
-        // For development, log the code
-        log.info("OTP Code for {}: {} (expires in 5 minutes)", dto.getPhoneNumber(), otpCode);
+        // Send OTP based on delivery method
+        if (dto.getDeliveryMethod() == OtpDeliveryMethod.EMAIL) {
+            sendOtpViaEmail(dto.getEmail(), otpCode);
+        } else {
+            sendOtpViaSms(dto.getPhoneNumber(), otpCode);
+        }
 
-        return MessageResponseDto.of("Código OTP enviado com sucesso para " + dto.getPhoneNumber());
+        return MessageResponseDto.of("Código OTP enviado com sucesso via " +
+            (dto.getDeliveryMethod() == OtpDeliveryMethod.EMAIL ? "email" : "SMS"));
+    }
+
+    /**
+     * Send OTP via email
+     */
+    private void sendOtpViaEmail(String email, String otpCode) {
+        try {
+            String subject = "Seu código de verificação - NaTomada";
+            String body = String.format(
+                "Olá!\n\n" +
+                "Seu código de verificação é: %s\n\n" +
+                "Este código expira em 5 minutos.\n\n" +
+                "Se você não solicitou este código, ignore este email.\n\n" +
+                "Atenciosamente,\n" +
+                "Equipe NaTomada",
+                otpCode
+            );
+
+            emailService.sendEmail(email, subject, body);
+            log.info("OTP sent via email to: {}", email);
+        } catch (Exception e) {
+            log.error("Failed to send OTP email to: {}", email, e);
+            // For development, log the code
+            log.warn("OTP Code for {}: {} (expires in 5 minutes) - Email sending failed", email, otpCode);
+        }
+    }
+
+    /**
+     * Send OTP via SMS
+     */
+    private void sendOtpViaSms(String phoneNumber, String otpCode) {
+        // TODO: Integrate with SMS service (Twilio, AWS SNS, etc.)
+        // For development, just log the code
+        log.info("OTP Code for {}: {} (expires in 5 minutes) - SMS integration pending", phoneNumber, otpCode);
+
+        // Example integration (commented out):
+        // try {
+        //     smsService.sendSms(phoneNumber, "Seu código NaTomada: " + otpCode);
+        //     log.info("OTP sent via SMS to: {}", phoneNumber);
+        // } catch (Exception e) {
+        //     log.error("Failed to send OTP SMS to: {}", phoneNumber, e);
+        //     throw new RuntimeException("Falha ao enviar SMS");
+        // }
     }
 
     /**
      * Verify OTP and authenticate user
-     * If phone number exists in database, logs the user in
-     * If phone number doesn't exist, returns success (allowing registration to continue)
+     * Supports both email and SMS verification
      */
     @Transactional
     public LoginResponseDto verifyOtp(VerifyOtpRequestDto dto) {
-        log.info("Verifying OTP for phone number: {}", dto.getPhoneNumber());
+        String recipient = dto.getDeliveryMethod() == OtpDeliveryMethod.EMAIL
+            ? dto.getEmail()
+            : dto.getPhoneNumber();
 
-        // Find the latest valid OTP for this phone number
-        OtpToken otpToken = otpTokenRepository.findLatestValidOtpByPhoneNumber(
-            dto.getPhoneNumber(),
-            LocalDateTime.now()
-        ).orElseThrow(() -> new InvalidTokenException("Código OTP inválido ou expirado"));
+        log.info("Verifying OTP via {} for: {}", dto.getDeliveryMethod(), recipient);
+
+        // Validate recipient based on delivery method
+        if (dto.getDeliveryMethod() == OtpDeliveryMethod.EMAIL && (dto.getEmail() == null || dto.getEmail().isBlank())) {
+            throw new IllegalArgumentException("Email é obrigatório para verificação via EMAIL");
+        }
+        if (dto.getDeliveryMethod() == OtpDeliveryMethod.SMS && (dto.getPhoneNumber() == null || dto.getPhoneNumber().isBlank())) {
+            throw new IllegalArgumentException("Número de telefone é obrigatório para verificação via SMS");
+        }
+
+        // Find the latest valid OTP
+        OtpToken otpToken;
+        if (dto.getDeliveryMethod() == OtpDeliveryMethod.EMAIL) {
+            otpToken = otpTokenRepository.findLatestValidOtpByEmail(
+                dto.getEmail(),
+                LocalDateTime.now()
+            ).orElseThrow(() -> new InvalidTokenException("Código OTP inválido ou expirado"));
+        } else {
+            otpToken = otpTokenRepository.findLatestValidOtpByPhoneNumber(
+                dto.getPhoneNumber(),
+                LocalDateTime.now()
+            ).orElseThrow(() -> new InvalidTokenException("Código OTP inválido ou expirado"));
+        }
 
         // Verify the OTP code
         if (!otpToken.getCode().equals(dto.getCode())) {
@@ -363,12 +448,18 @@ public class AuthService {
         otpToken.markAsVerified();
         otpTokenRepository.save(otpToken);
 
-        // Check if user with this phone number exists
-        User user = userRepository.findByPhone(dto.getPhoneNumber()).orElse(null);
-
-        if (user == null) {
-            // Phone number not registered - throw exception to allow registration flow
-            throw new UserNotFoundException("Número de telefone não cadastrado. Por favor, complete o cadastro.");
+        // Find user by email or phone
+        User user;
+        if (dto.getDeliveryMethod() == OtpDeliveryMethod.EMAIL) {
+            user = userRepository.findByEmail(dto.getEmail()).orElse(null);
+            if (user == null) {
+                throw new UserNotFoundException("Email não cadastrado. Por favor, complete o cadastro.");
+            }
+        } else {
+            user = userRepository.findByPhone(dto.getPhoneNumber()).orElse(null);
+            if (user == null) {
+                throw new UserNotFoundException("Número de telefone não cadastrado. Por favor, complete o cadastro.");
+            }
         }
 
         // User exists - generate tokens and log them in
@@ -385,7 +476,7 @@ public class AuthService {
 
         refreshTokenRepository.save(refreshToken);
 
-        log.info("User logged in successfully via OTP: {}", user.getId());
+        log.info("User logged in successfully via {} OTP: {}", dto.getDeliveryMethod(), user.getId());
 
         // Publish USER_LOGGED_IN event
         UserLoggedInEvent loginEvent = UserLoggedInEvent.of(
