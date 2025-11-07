@@ -2,10 +2,12 @@ package com.barbatech.natomada.auth.application.services;
 
 import com.barbatech.natomada.auth.application.dtos.*;
 import com.barbatech.natomada.auth.application.exceptions.*;
+import com.barbatech.natomada.auth.domain.entities.OtpToken;
 import com.barbatech.natomada.auth.domain.entities.PasswordResetToken;
 import com.barbatech.natomada.auth.domain.entities.RefreshToken;
 import com.barbatech.natomada.auth.domain.entities.User;
 import com.barbatech.natomada.auth.infrastructure.config.JwtProperties;
+import com.barbatech.natomada.auth.infrastructure.repositories.OtpTokenRepository;
 import com.barbatech.natomada.auth.infrastructure.repositories.PasswordResetTokenRepository;
 import com.barbatech.natomada.auth.infrastructure.repositories.RefreshTokenRepository;
 import com.barbatech.natomada.auth.infrastructure.repositories.UserRepository;
@@ -22,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -35,6 +38,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final OtpTokenRepository otpTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
     private final JwtProperties jwtProperties;
@@ -305,11 +309,126 @@ public class AuthService {
     }
 
     /**
+     * Send OTP to phone number
+     * Generates a 6-digit code and stores it in database
+     */
+    @Transactional
+    public MessageResponseDto sendOtp(SendOtpRequestDto dto) {
+        log.info("Sending OTP to phone number: {}", dto.getPhoneNumber());
+
+        // Delete any existing OTPs for this phone number
+        otpTokenRepository.deleteByPhoneNumber(dto.getPhoneNumber());
+
+        // Generate 6-digit OTP code
+        String otpCode = generateOtpCode();
+
+        // Create OTP token (expires in 5 minutes)
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(5);
+        OtpToken otpToken = OtpToken.builder()
+            .phoneNumber(dto.getPhoneNumber())
+            .code(otpCode)
+            .expiresAt(expiresAt)
+            .build();
+
+        otpTokenRepository.save(otpToken);
+
+        // TODO: Integrate with SMS service (Twilio, AWS SNS, etc.) to send the OTP code
+        // For development, log the code
+        log.info("OTP Code for {}: {} (expires in 5 minutes)", dto.getPhoneNumber(), otpCode);
+
+        return MessageResponseDto.of("Código OTP enviado com sucesso para " + dto.getPhoneNumber());
+    }
+
+    /**
+     * Verify OTP and authenticate user
+     * If phone number exists in database, logs the user in
+     * If phone number doesn't exist, returns success (allowing registration to continue)
+     */
+    @Transactional
+    public LoginResponseDto verifyOtp(VerifyOtpRequestDto dto) {
+        log.info("Verifying OTP for phone number: {}", dto.getPhoneNumber());
+
+        // Find the latest valid OTP for this phone number
+        OtpToken otpToken = otpTokenRepository.findLatestValidOtpByPhoneNumber(
+            dto.getPhoneNumber(),
+            LocalDateTime.now()
+        ).orElseThrow(() -> new InvalidTokenException("Código OTP inválido ou expirado"));
+
+        // Verify the OTP code
+        if (!otpToken.getCode().equals(dto.getCode())) {
+            throw new InvalidTokenException("Código OTP incorreto");
+        }
+
+        // Mark OTP as verified
+        otpToken.markAsVerified();
+        otpTokenRepository.save(otpToken);
+
+        // Check if user with this phone number exists
+        User user = userRepository.findByPhone(dto.getPhoneNumber()).orElse(null);
+
+        if (user == null) {
+            // Phone number not registered - throw exception to allow registration flow
+            throw new UserNotFoundException("Número de telefone não cadastrado. Por favor, complete o cadastro.");
+        }
+
+        // User exists - generate tokens and log them in
+        String accessToken = jwtUtil.generateAccessToken(user.getId(), user.getEmail());
+        String refreshTokenStr = jwtUtil.generateRefreshToken();
+
+        // Save refresh token (expires in 7 days)
+        LocalDateTime refreshExpiresAt = LocalDateTime.now().plusDays(7);
+        RefreshToken refreshToken = RefreshToken.builder()
+            .user(user)
+            .token(refreshTokenStr)
+            .expiresAt(refreshExpiresAt)
+            .build();
+
+        refreshTokenRepository.save(refreshToken);
+
+        log.info("User logged in successfully via OTP: {}", user.getId());
+
+        // Publish USER_LOGGED_IN event
+        UserLoggedInEvent loginEvent = UserLoggedInEvent.of(
+            user.getId(),
+            user.getEmail(),
+            "unknown",
+            "unknown"
+        );
+        eventPublisher.publish("natomada.auth.events", loginEvent);
+
+        return LoginResponseDto.builder()
+            .accessToken(accessToken)
+            .refreshToken(refreshTokenStr)
+            .tokenType("Bearer")
+            .expiresIn(jwtProperties.getExpiresIn() / 1000)
+            .user(UserResponseDto.fromEntity(user))
+            .build();
+    }
+
+    /**
+     * Generate a random 6-digit OTP code
+     */
+    private String generateOtpCode() {
+        Random random = new Random();
+        int code = 100000 + random.nextInt(900000); // Generates 100000-999999
+        return String.valueOf(code);
+    }
+
+    /**
      * Clean up expired password reset tokens (can be scheduled)
      */
     @Transactional
     public void cleanupExpiredResetTokens() {
         log.info("Cleaning up expired password reset tokens");
         passwordResetTokenRepository.deleteExpiredTokens(LocalDateTime.now());
+    }
+
+    /**
+     * Clean up expired OTP tokens (can be scheduled)
+     */
+    @Transactional
+    public void cleanupExpiredOtps() {
+        log.info("Cleaning up expired OTP tokens");
+        otpTokenRepository.deleteExpiredOtps(LocalDateTime.now());
     }
 }
