@@ -234,4 +234,58 @@ public class AuthController {
         MessageResponseDto response = authService.resetPassword(dto);
         return ResponseEntity.ok(response);
     }
+
+    /**
+     * Send OTP to phone number
+     * POST /api/auth/send-otp
+     */
+    @Operation(
+        summary = "Enviar código OTP",
+        description = "Envia um código OTP de 6 dígitos para o número de telefone fornecido"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "OTP enviado com sucesso",
+            content = @Content(schema = @Schema(implementation = MessageResponseDto.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Número de telefone inválido"
+        )
+    })
+    @PostMapping("/send-otp")
+    public ResponseEntity<MessageResponseDto> sendOtp(@Valid @RequestBody SendOtpRequestDto dto) {
+        MessageResponseDto response = authService.sendOtp(dto);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Verify OTP and authenticate user
+     * POST /api/auth/verify-otp
+     */
+    @Operation(
+        summary = "Verificar código OTP",
+        description = "Verifica o código OTP e autentica o usuário se o número estiver cadastrado"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(
+            responseCode = "200",
+            description = "OTP verificado e usuário autenticado com sucesso",
+            content = @Content(schema = @Schema(implementation = LoginResponseDto.class))
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Código OTP inválido ou expirado"
+        ),
+        @ApiResponse(
+            responseCode = "404",
+            description = "Número de telefone não cadastrado"
+        )
+    })
+    @PostMapping("/verify-otp")
+    public ResponseEntity<LoginResponseDto> verifyOtp(@Valid @RequestBody VerifyOtpRequestDto dto) {
+        LoginResponseDto response = authService.verifyOtp(dto);
+        return ResponseEntity.ok(response);
+    }
 }
