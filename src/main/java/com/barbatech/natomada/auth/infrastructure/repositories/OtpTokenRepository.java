@@ -28,6 +28,17 @@ public interface OtpTokenRepository extends JpaRepository<OtpToken, Long> {
     );
 
     /**
+     * Find the latest valid OTP for an email address
+     */
+    @Query("SELECT ot FROM OtpToken ot WHERE ot.email = :email " +
+           "AND ot.expiresAt > :now AND ot.verifiedAt IS NULL " +
+           "ORDER BY ot.createdAt DESC LIMIT 1")
+    Optional<OtpToken> findLatestValidOtpByEmail(
+        @Param("email") String email,
+        @Param("now") LocalDateTime now
+    );
+
+    /**
      * Delete all expired OTPs
      */
     @Modifying
@@ -40,4 +51,11 @@ public interface OtpTokenRepository extends JpaRepository<OtpToken, Long> {
     @Modifying
     @Query("DELETE FROM OtpToken ot WHERE ot.phoneNumber = :phoneNumber")
     void deleteByPhoneNumber(@Param("phoneNumber") String phoneNumber);
+
+    /**
+     * Delete all OTPs for a specific email
+     */
+    @Modifying
+    @Query("DELETE FROM OtpToken ot WHERE ot.email = :email")
+    void deleteByEmail(@Param("email") String email);
 }
