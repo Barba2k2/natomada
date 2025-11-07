@@ -1,5 +1,6 @@
 package com.barbatech.natomada.auth.domain.entities;
 
+import com.barbatech.natomada.auth.domain.enums.OtpDeliveryMethod;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,12 +13,13 @@ import java.time.LocalDateTime;
 /**
  * Domain Entity: OtpToken
  *
- * Represents an OTP (One-Time Password) token for phone verification.
+ * Represents an OTP (One-Time Password) token for email or phone verification.
  * Tokens expire after 5 minutes and can only be used once.
  */
 @Entity
 @Table(name = "otp_tokens", indexes = {
     @Index(name = "idx_otp_phone", columnList = "phone_number"),
+    @Index(name = "idx_otp_email", columnList = "email"),
     @Index(name = "idx_otp_expires_at", columnList = "expires_at")
 })
 @Data
@@ -30,8 +32,15 @@ public class OtpToken {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "phone_number", nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_method", nullable = false, length = 10)
+    private OtpDeliveryMethod deliveryMethod;
+
+    @Column(name = "phone_number", length = 20)
     private String phoneNumber;
+
+    @Column(length = 255)
+    private String email;
 
     @Column(nullable = false, length = 6)
     private String code;
