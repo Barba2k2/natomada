@@ -18,6 +18,7 @@ import com.barbatech.natomada.infrastructure.events.auth.UserLoggedInEvent;
 import com.barbatech.natomada.infrastructure.events.auth.UserLoggedOutEvent;
 import com.barbatech.natomada.infrastructure.events.auth.UserRegisteredEvent;
 import com.barbatech.natomada.infrastructure.kafka.EventPublisher;
+import com.barbatech.natomada.infrastructure.sms.IntegrafluxSmsService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -45,6 +46,7 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final EventPublisher eventPublisher;
     private final EmailService emailService;
+    private final IntegrafluxSmsService smsService;
 
     /**
      * Register a new user
@@ -388,21 +390,19 @@ public class AuthService {
     }
 
     /**
-     * Send OTP via SMS
+     * Send OTP via SMS using Integraflux API
      */
     private void sendOtpViaSms(String phoneNumber, String otpCode) {
-        // TODO: Integrate with SMS service (Twilio, AWS SNS, etc.)
-        // For development, just log the code
-        log.info("OTP Code for {}: {} (expires in 5 minutes) - SMS integration pending", phoneNumber, otpCode);
-
-        // Example integration (commented out):
-        // try {
-        //     smsService.sendSms(phoneNumber, "Seu código NaTomada: " + otpCode);
-        //     log.info("OTP sent via SMS to: {}", phoneNumber);
-        // } catch (Exception e) {
-        //     log.error("Failed to send OTP SMS to: {}", phoneNumber, e);
-        //     throw new RuntimeException("Falha ao enviar SMS");
-        // }
+        try {
+            smsService.sendOtpSms(phoneNumber, otpCode);
+            log.info("OTP sent via SMS to: {}", phoneNumber);
+        } catch (Exception e) {
+            log.error("Failed to send OTP SMS to: {}", phoneNumber, e);
+            // For development/testing, also log the code if SMS fails
+            log.warn("OTP Code for {}: {} (expires in 5 minutes) - SMS sending failed", phoneNumber, otpCode);
+            // Don't throw exception - allow process to continue
+            // In production, you might want to throw here depending on requirements
+        }
     }
 
     /**
