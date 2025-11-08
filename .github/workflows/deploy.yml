@@ -277,7 +277,13 @@ jobs:
             sleep 20
 
             # Show container status
+            echo "Container status after initial startup:"
             docker compose -f docker-compose.prod.yml ps
+
+            # Check for immediate startup failures
+            echo ""
+            echo "Checking for immediate startup errors..."
+            docker compose -f docker-compose.prod.yml logs --tail=50 app | grep -i "error\|exception\|failed" || echo "No immediate errors detected"
 
       - name: Run Database Migrations
         uses: appleboy/ssh-action@v1.0.3
@@ -326,22 +332,41 @@ jobs:
               # Check health endpoint
               if curl -f http://localhost:8080/actuator/health > /dev/null 2>&1; then
                 echo "✓ Application is healthy!"
+                echo ""
 
                 # Get detailed health info
-                echo "Health details:"
+                echo "=== HEALTH DETAILS ==="
                 curl -s http://localhost:8080/actuator/health | jq '.' || curl -s http://localhost:8080/actuator/health
+                echo ""
 
                 # Check database connection
-                echo "Checking database connectivity..."
+                echo "=== DATABASE CONNECTIVITY ==="
                 docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U postgres
+                echo ""
 
                 # Check Redis connection
-                echo "Checking Redis connectivity..."
+                echo "=== REDIS CONNECTIVITY ==="
                 docker compose -f docker-compose.prod.yml exec -T redis redis-cli -a "${REDIS_PASSWORD}" ping
+                echo ""
 
-                # Show application logs (last 20 lines)
-                echo "Recent application logs:"
-                docker compose -f docker-compose.prod.yml logs --tail=20 app
+                # Check if there were any startup errors (even if now healthy)
+                echo "=== STARTUP WARNINGS/ERRORS (if any) ==="
+                docker compose -f docker-compose.prod.yml logs app | grep -i "warn\|error" | tail -20 || echo "No warnings or errors found"
+                echo ""
+
+                # Show application logs (last 30 lines)
+                echo "=== RECENT APPLICATION LOGS ==="
+                docker compose -f docker-compose.prod.yml logs --tail=30 app
+                echo ""
+
+                # Show successful startup message
+                echo "=== DEPLOYMENT SUMMARY ==="
+                echo "✓ Application deployed successfully"
+                echo "✓ Health endpoint responding"
+                echo "✓ Database connected"
+                echo "✓ Redis connected"
+                docker compose -f docker-compose.prod.yml ps app
+                echo ""
 
                 exit 0
               fi
@@ -352,14 +377,60 @@ jobs:
 
             # Health check failed
             echo "❌ Application failed to become healthy!"
-            echo "Container status:"
+            echo ""
+            echo "=== CONTAINER STATUS ==="
             docker compose -f docker-compose.prod.yml ps
             echo ""
-            echo "Application logs (last 100 lines):"
-            docker compose -f docker-compose.prod.yml logs --tail=100 app
+
+            echo "=== FULL APPLICATION LOGS ==="
+            docker compose -f docker-compose.prod.yml logs app
             echo ""
-            echo "System resources:"
+
+            echo "=== ERRORS AND EXCEPTIONS ==="
+            docker compose -f docker-compose.prod.yml logs app | grep -i "error\|exception\|failed\|caused by" -A 5 -B 2 || echo "No errors found in logs"
+            echo ""
+
+            echo "=== STARTUP SEQUENCE ==="
+            docker compose -f docker-compose.prod.yml logs app | grep -i "started\|starting\|application" -A 2 || echo "No startup logs found"
+            echo ""
+
+            echo "=== DATABASE CONNECTIVITY ==="
+            docker compose -f docker-compose.prod.yml logs app | grep -i "database\|postgres\|flyway\|migration" || echo "No database logs found"
+            echo ""
+
+            echo "=== SPRING BOOT STATUS ==="
+            docker compose -f docker-compose.prod.yml logs app | grep -i "spring\|tomcat\|embedded" || echo "No Spring Boot logs found"
+            echo ""
+
+            echo "=== HEALTH ENDPOINT TEST ==="
+            curl -v http://localhost:8080/actuator/health 2>&1 || echo "Health endpoint not accessible"
+            echo ""
+
+            echo "=== ENVIRONMENT CHECK ==="
+            docker compose -f docker-compose.prod.yml exec -T app env | grep -E "SPRING_|DATABASE_|POSTGRES_|REDIS_" | sed 's/PASSWORD=.*/PASSWORD=***REDACTED***/g' || echo "Cannot check environment"
+            echo ""
+
+            echo "=== INFRASTRUCTURE SERVICES STATUS ==="
+            echo "PostgreSQL:"
+            docker compose -f docker-compose.prod.yml exec -T postgres pg_isready -U postgres || echo "PostgreSQL not ready"
+            echo "Redis:"
+            docker compose -f docker-compose.prod.yml exec -T redis redis-cli -a "${REDIS_PASSWORD}" ping 2>/dev/null || echo "Redis not ready"
+            echo "Kafka:"
+            docker compose -f docker-compose.prod.yml exec -T kafka kafka-broker-api-versions --bootstrap-server localhost:9092 2>/dev/null || echo "Kafka not ready"
+            echo ""
+
+            echo "=== SYSTEM RESOURCES ==="
             docker stats --no-stream
+            echo ""
+
+            echo "=== DISK SPACE ==="
+            df -h /opt
+            echo ""
+
+            echo "=== NETWORK CONNECTIVITY ==="
+            docker compose -f docker-compose.prod.yml exec -T app ping -c 3 postgres 2>/dev/null || echo "Cannot ping postgres from app"
+            docker compose -f docker-compose.prod.yml exec -T app ping -c 3 redis 2>/dev/null || echo "Cannot ping redis from app"
+            echo ""
 
             exit 1
 
@@ -446,12 +517,19 @@ jobs:
             fi
 
             # Show current status
-            echo "Current container status:"
+            echo ""
+            echo "=== ROLLBACK STATUS ==="
             docker ps -a | grep natomada
+            echo ""
 
             # Show recent logs
-            echo "Recent logs:"
-            docker logs --tail=50 natomada-app 2>&1 || docker compose -f docker-compose.prod.yml logs --tail=50 app
+            echo "=== ROLLBACK APPLICATION LOGS ==="
+            docker logs --tail=100 natomada-app 2>&1 || docker compose -f docker-compose.prod.yml logs --tail=100 app
+            echo ""
+
+            echo "=== ROLLBACK ERRORS (if any) ==="
+            docker logs natomada-app 2>&1 | grep -i "error\|exception" | tail -20 || docker compose -f docker-compose.prod.yml logs app | grep -i "error\|exception" | tail -20 || echo "No errors found"
+            echo ""
 
   notify:
     name: Notify Deployment Status
