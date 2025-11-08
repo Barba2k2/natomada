@@ -32,4 +32,13 @@ public interface EmailService {
      * @param userName User's name
      */
     void sendEmailVerification(String to, String token, String userName);
+
+    /**
+     * Send generic email
+     *
+     * @param to Recipient email address
+     * @param subject Email subject
+     * @param body Email body
+     */
+    void sendEmail(String to, String subject, String body);
 }
