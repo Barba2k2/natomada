@@ -14,6 +14,7 @@ import com.barbatech.natomada.cars.infrastructure.repositories.CarRepository;
 import com.barbatech.natomada.cars.infrastructure.repositories.UserVehicleRepository;
 import com.barbatech.natomada.infrastructure.events.cars.VehicleAddedEvent;
 import com.barbatech.natomada.infrastructure.events.cars.VehicleRemovedEvent;
+import com.barbatech.natomada.infrastructure.i18n.MessageSourceService;
 import com.barbatech.natomada.infrastructure.kafka.EventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,7 @@ public class UserVehiclesService {
     private final CarRepository carRepository;
     private final UserRepository userRepository;
     private final EventPublisher eventPublisher;
+    private final MessageSourceService messageService;
 
     /**
      * Add vehicle to user account
@@ -53,7 +55,7 @@ public class UserVehiclesService {
 
         // Check if user already has this car
         if (userVehicleRepository.existsByUserIdAndCarId(userId, dto.getCarId())) {
-            throw new IllegalArgumentException("Você já possui este veículo");
+            throw new IllegalArgumentException(messageService.getMessage("vehicle.duplicate"));
         }
 
         // If it's the first vehicle or isPrimary is true, unset all others
