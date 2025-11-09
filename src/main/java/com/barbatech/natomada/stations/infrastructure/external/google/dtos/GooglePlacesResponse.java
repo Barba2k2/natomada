@@ -56,6 +56,25 @@ public class GooglePlacesResponse {
 
         @JsonProperty("types")
         private List<String> types;
+
+        @JsonProperty("photos")
+        private List<Photo> photos;
+    }
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class Photo {
+        @JsonProperty("photo_reference")
+        private String photoReference;
+
+        @JsonProperty("height")
+        private Integer height;
+
+        @JsonProperty("width")
+        private Integer width;
+
+        @JsonProperty("html_attributions")
+        private List<String> htmlAttributions;
     }
 
     @Data

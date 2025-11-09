@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * DTO for station response
@@ -41,6 +42,7 @@ public class StationResponseDto {
     private Integer totalReviews;
     private String openingHours; // JSON string
     private Boolean isOpen24h;
+    private List<String> photoReferences; // List of Google Places photo references
     private LocalDateTime lastVerifiedAt;
     private Boolean isRecentlyVerified;
     private LocalDateTime lastSyncAt;

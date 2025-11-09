@@ -84,7 +84,11 @@ public class ExternalStationMapper {
 
         // Connectors
         if (ocm.getConnections() != null && !ocm.getConnections().isEmpty()) {
-            station.setTotalConnectors(ocm.getConnections().size());
+            // Calculate total by summing quantities
+            int totalConnectors = ocm.getConnections().stream()
+                .mapToInt(conn -> conn.getQuantity() != null ? conn.getQuantity() : 1)
+                .sum();
+            station.setTotalConnectors(totalConnectors);
             try {
                 String connectorsJson = objectMapper.writeValueAsString(mapConnectors(ocm.getConnections()));
                 station.setConnectors(connectorsJson);
@@ -134,6 +138,25 @@ public class ExternalStationMapper {
                 station.setOpeningHours(objectMapper.writeValueAsString(place.getOpeningHours().getWeekdayText()));
             } catch (JsonProcessingException e) {
                 log.error("Error converting opening hours to JSON", e);
+            }
+        }
+
+        // Photo references
+        if (place.getPhotos() != null && !place.getPhotos().isEmpty()) {
+            try {
+                List<String> photoRefs = new ArrayList<>();
+                // Get up to 5 photo references
+                int maxPhotos = Math.min(place.getPhotos().size(), 5);
+                for (int i = 0; i < maxPhotos; i++) {
+                    String photoRef = place.getPhotos().get(i).getPhotoReference();
+                    if (photoRef != null) {
+                        photoRefs.add(photoRef);
+                    }
+                }
+                station.setPhotoReferences(objectMapper.writeValueAsString(photoRefs));
+                log.debug("Stored {} photo references for station {}", photoRefs.size(), station.getName());
+            } catch (JsonProcessingException e) {
+                log.error("Error converting photo references to JSON", e);
             }
         }
 

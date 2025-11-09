@@ -8,6 +8,8 @@ import com.barbatech.natomada.stations.infrastructure.external.google.dtos.Googl
 import com.barbatech.natomada.stations.infrastructure.external.opencm.OpenChargeMapService;
 import com.barbatech.natomada.stations.infrastructure.external.opencm.dtos.OpenChargeMapResponse;
 import com.barbatech.natomada.stations.infrastructure.repositories.StationRepository;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +31,7 @@ public class StationsService {
     private final OpenChargeMapService openChargeMapService;
     private final GooglePlacesService googlePlacesService;
     private final ExternalStationMapper externalStationMapper;
+    private final ObjectMapper objectMapper;
 
     /**
      * Get nearby stations from external APIs (OpenChargeMap + Google Places)
@@ -159,6 +162,19 @@ public class StationsService {
      * Map Station entity to response DTO
      */
     private StationResponseDto mapToResponse(Station station) {
+        // Parse photo references from JSON
+        List<String> photoRefs = new ArrayList<>();
+        if (station.getPhotoReferences() != null) {
+            try {
+                photoRefs = objectMapper.readValue(
+                    station.getPhotoReferences(),
+                    new TypeReference<List<String>>() {}
+                );
+            } catch (Exception e) {
+                log.warn("Error parsing photo references for station {}: {}", station.getName(), e.getMessage());
+            }
+        }
+
         return StationResponseDto.builder()
             .id(station.getId())
             .ocmId(station.getOcmId())
@@ -200,6 +216,7 @@ public class StationsService {
             .totalReviews(station.getTotalReviews())
             .openingHours(station.getOpeningHours())
             .isOpen24h(station.getIsOpen24h())
+            .photoReferences(photoRefs)
             .lastVerifiedAt(station.getLastVerifiedAt())
             .isRecentlyVerified(station.getIsRecentlyVerified())
             .lastSyncAt(station.getLastSyncAt())

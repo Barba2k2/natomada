@@ -156,6 +156,11 @@ public class Station {
     @Column(name = "is_open_24h", nullable = false)
     private Boolean isOpen24h = false;
 
+    // Photo References (JSON)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "photo_references", columnDefinition = "jsonb")
+    private String photoReferences;
+
     // Metadata
     @Column(name = "last_verified_at")
     private LocalDateTime lastVerifiedAt;
