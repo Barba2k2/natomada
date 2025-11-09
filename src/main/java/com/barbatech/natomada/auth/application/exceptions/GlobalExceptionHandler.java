@@ -1,5 +1,7 @@
 package com.barbatech.natomada.auth.application.exceptions;
 
+import org.springframework.context.MessageSource;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -9,6 +11,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -17,34 +20,60 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    private final MessageSource messageSource;
+
+    public GlobalExceptionHandler(MessageSource messageSource) {
+        this.messageSource = messageSource;
+    }
+
+    /**
+     * Obtém o locale atual do contexto
+     */
+    private Locale getLocale() {
+        return LocaleContextHolder.getLocale();
+    }
+
+    /**
+     * Obtém mensagem traduzida pelo código
+     */
+    private String getMessage(String code) {
+        return messageSource.getMessage(code, null, code, getLocale());
+    }
+
     @ExceptionHandler(EmailAlreadyExistsException.class)
     public ResponseEntity<ErrorResponse> handleEmailAlreadyExists(EmailAlreadyExistsException ex) {
-        return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage());
+        String message = getMessage("auth.email.already.exists");
+        return buildErrorResponse(HttpStatus.CONFLICT, message);
     }
 
     @ExceptionHandler(PhoneAlreadyExistsException.class)
     public ResponseEntity<ErrorResponse> handlePhoneAlreadyExists(PhoneAlreadyExistsException ex) {
-        return buildErrorResponse(HttpStatus.CONFLICT, ex.getMessage());
+        String message = getMessage("auth.phone.already.exists");
+        return buildErrorResponse(HttpStatus.CONFLICT, message);
     }
 
     @ExceptionHandler(InvalidCredentialsException.class)
     public ResponseEntity<ErrorResponse> handleInvalidCredentials(InvalidCredentialsException ex) {
-        return buildErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage());
+        String message = getMessage("auth.invalid.credentials");
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED, message);
     }
 
     @ExceptionHandler(InvalidTokenException.class)
     public ResponseEntity<ErrorResponse> handleInvalidToken(InvalidTokenException ex) {
-        return buildErrorResponse(HttpStatus.UNAUTHORIZED, ex.getMessage());
+        String message = getMessage("auth.invalid.token");
+        return buildErrorResponse(HttpStatus.UNAUTHORIZED, message);
     }
 
     @ExceptionHandler(UserNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleUserNotFound(UserNotFoundException ex) {
-        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+        String message = getMessage("auth.user.not.found");
+        return buildErrorResponse(HttpStatus.NOT_FOUND, message);
     }
 
     @ExceptionHandler(PasswordMismatchException.class)
     public ResponseEntity<ErrorResponse> handlePasswordMismatch(PasswordMismatchException ex) {
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+        String message = getMessage("auth.password.mismatch");
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, message);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -56,11 +85,14 @@ public class GlobalExceptionHandler {
             errors.put(fieldName, errorMessage);
         });
 
+        String errorTitle = getMessage("validation.error");
+        String errorMessage = getMessage("validation.invalid.data");
+
         ValidationErrorResponse response = ValidationErrorResponse.builder()
             .timestamp(LocalDateTime.now())
             .status(HttpStatus.UNPROCESSABLE_ENTITY.value())
-            .error("Validation Error")
-            .message("Dados inválidos")
+            .error(errorTitle)
+            .message(errorMessage)
             .errors(errors)
             .build();
 
@@ -69,7 +101,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AuthException.class)
     public ResponseEntity<ErrorResponse> handleAuthException(AuthException ex) {
-        return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage());
+        String message = getMessage("auth.unauthorized");
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, message);
     }
 
     private ResponseEntity<ErrorResponse> buildErrorResponse(HttpStatus status, String message) {
