@@ -32,6 +32,48 @@ public class OpenChargeMapService {
     private String baseUrl;
 
     /**
+     * Get charging station by OCM ID
+     *
+     * @param ocmId OpenChargeMap station ID
+     * @return Charging station details
+     */
+    public OpenChargeMapResponse getById(Integer ocmId) {
+        try {
+            log.info("Calling OpenChargeMap API to get station by ID: {}", ocmId);
+
+            String url = UriComponentsBuilder.fromUriString(baseUrl + "/poi/")
+                .queryParam("key", apiKey)
+                .queryParam("chargepointid", ocmId)
+                .queryParam("compact", "false")
+                .queryParam("verbose", "false")
+                .toUriString();
+
+            log.debug("OpenChargeMap URL: {}", url);
+
+            ResponseEntity<List<OpenChargeMapResponse>> response = restTemplate.exchange(
+                url,
+                HttpMethod.GET,
+                null,
+                new ParameterizedTypeReference<List<OpenChargeMapResponse>>() {}
+            );
+
+            List<OpenChargeMapResponse> stations = response.getBody();
+
+            if (stations == null || stations.isEmpty()) {
+                log.warn("OpenChargeMap returned no station for ID: {}", ocmId);
+                return null;
+            }
+
+            log.info("OpenChargeMap returned station: {}", stations.get(0).getAddressInfo().getTitle());
+            return stations.get(0);
+
+        } catch (Exception e) {
+            log.error("Error calling OpenChargeMap API for ID {}: {}", ocmId, e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
      * Search for nearby charging stations
      *
      * @param latitude Latitude coordinate
