@@ -4,6 +4,7 @@ import com.barbatech.natomada.cars.application.dtos.CarResponseDto;
 import com.barbatech.natomada.cars.application.dtos.ListCarsRequestDto;
 import com.barbatech.natomada.cars.domain.entities.Car;
 import com.barbatech.natomada.cars.infrastructure.repositories.CarRepository;
+import com.barbatech.natomada.infrastructure.i18n.MessageSourceService;
 import com.barbatech.natomada.infrastructure.storage.S3StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,7 @@ public class CarsService {
 
     private final CarRepository carRepository;
     private final S3StorageService s3StorageService;
+    private final MessageSourceService messageService;
 
     private static final List<String> ALLOWED_IMAGE_TYPES = Arrays.asList(
         "image/jpeg", "image/jpg", "image/png", "image/webp"
@@ -149,16 +151,16 @@ public class CarsService {
      */
     private void validateImageFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Arquivo não pode estar vazio");
+            throw new IllegalArgumentException(messageService.getMessage("file.empty"));
         }
 
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new IllegalArgumentException("Arquivo muito grande. Tamanho máximo: 10MB");
+            throw new IllegalArgumentException(messageService.getMessage("file.too.large"));
         }
 
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED_IMAGE_TYPES.contains(contentType.toLowerCase())) {
-            throw new IllegalArgumentException("Tipo de arquivo não permitido. Use: JPEG, PNG ou WebP");
+            throw new IllegalArgumentException(messageService.getMessage("file.invalid.type"));
         }
     }
 
@@ -177,7 +179,7 @@ public class CarsService {
             }
             return key;
         }
-        throw new IllegalArgumentException("URL inválida");
+        throw new IllegalArgumentException(messageService.getMessage("file.url.invalid"));
     }
 
     /**
