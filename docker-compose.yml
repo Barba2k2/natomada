@@ -155,6 +155,11 @@ services:
       SERVER_PORT: 8080
       LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
       LOGGING_LEVEL_COM_BARBATECH: ${LOG_LEVEL_APP:-DEBUG}
+
+      # External APIs
+      OPENCM_API_KEY: ${OPENCM_API_KEY}
+      OPENCM_BASE_URL: ${OPENCM_BASE_URL:-https://api.openchargemap.io/v3}
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY}
     ports:
       - "${APP_PORT:-8080}:8080"
     networks:
