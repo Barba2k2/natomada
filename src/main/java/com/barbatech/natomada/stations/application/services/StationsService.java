@@ -2,6 +2,11 @@ package com.barbatech.natomada.stations.application.services;
 
 import com.barbatech.natomada.stations.application.dtos.StationResponseDto;
 import com.barbatech.natomada.stations.domain.entities.Station;
+import com.barbatech.natomada.stations.infrastructure.external.ExternalStationMapper;
+import com.barbatech.natomada.stations.infrastructure.external.google.GooglePlacesService;
+import com.barbatech.natomada.stations.infrastructure.external.google.dtos.GooglePlacesResponse;
+import com.barbatech.natomada.stations.infrastructure.external.opencm.OpenChargeMapService;
+import com.barbatech.natomada.stations.infrastructure.external.opencm.dtos.OpenChargeMapResponse;
 import com.barbatech.natomada.stations.infrastructure.repositories.StationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,7 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -21,15 +26,18 @@ import java.util.stream.Collectors;
 public class StationsService {
 
     private final StationRepository stationRepository;
+    private final OpenChargeMapService openChargeMapService;
+    private final GooglePlacesService googlePlacesService;
+    private final ExternalStationMapper externalStationMapper;
 
     /**
-     * Get nearby stations
+     * Get nearby stations from external APIs (OpenChargeMap + Google Places)
      *
-     * NOTE: This is a simplified implementation that searches within a bounding box.
-     * For production, you should:
-     * 1. Integrate with OpenChargeMap API
-     * 2. Enrich with Google Places API
-     * 3. Use PostGIS for accurate distance calculations
+     * Strategy:
+     * 1. Fetch stations from OpenChargeMap (primary source)
+     * 2. Fetch stations from Google Places (enrichment)
+     * 3. Merge and enrich data
+     * 4. Return combined results
      */
     @Transactional(readOnly = true)
     public List<StationResponseDto> getNearbyStations(
@@ -38,33 +46,113 @@ public class StationsService {
         Integer radius,
         Integer limit
     ) {
-        log.info("Fetching nearby stations: lat={}, lon={}, radius={}m, limit={}",
+        log.info("Fetching nearby stations from external APIs: lat={}, lon={}, radius={}m, limit={}",
                  latitude, longitude, radius, limit);
 
-        // Calculate approximate bounding box
-        // 1 degree latitude ≈ 111km
-        // 1 degree longitude ≈ 111km * cos(latitude)
-        double radiusInDegrees = radius / 111000.0;
-        BigDecimal minLat = BigDecimal.valueOf(latitude - radiusInDegrees);
-        BigDecimal maxLat = BigDecimal.valueOf(latitude + radiusInDegrees);
-        BigDecimal minLon = BigDecimal.valueOf(longitude - radiusInDegrees);
-        BigDecimal maxLon = BigDecimal.valueOf(longitude + radiusInDegrees);
+        List<Station> allStations = new ArrayList<>();
 
-        // Find stations in bounding box
-        List<Station> stations = stationRepository.findNearbyStations(
-            minLat, maxLat, minLon, maxLon
-        );
+        // Step 1: Fetch from OpenChargeMap (primary source)
+        try {
+            List<OpenChargeMapResponse> ocmStations = openChargeMapService.searchNearby(
+                latitude,
+                longitude,
+                radius / 1000, // Convert meters to kilometers
+                limit != null ? limit : 50
+            );
 
-        // Limit results
-        if (limit != null && stations.size() > limit) {
-            stations = stations.subList(0, limit);
+            for (OpenChargeMapResponse ocmStation : ocmStations) {
+                Station station = externalStationMapper.fromOpenChargeMap(ocmStation);
+                allStations.add(station);
+            }
+
+            log.info("Fetched {} stations from OpenChargeMap", ocmStations.size());
+        } catch (Exception e) {
+            log.error("Error fetching from OpenChargeMap: {}", e.getMessage(), e);
         }
 
-        log.info("Found {} stations", stations.size());
+        // Step 2: Fetch from Google Places (enrichment source)
+        try {
+            GooglePlacesResponse googleResponse = googlePlacesService.searchNearby(
+                latitude,
+                longitude,
+                radius
+            );
 
-        return stations.stream()
+            if (googleResponse.getResults() != null) {
+                log.info("Fetched {} places from Google Places", googleResponse.getResults().size());
+
+                // Try to match Google Places with OpenChargeMap stations by proximity
+                for (GooglePlacesResponse.Place place : googleResponse.getResults()) {
+                    matchAndEnrichStation(allStations, place);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error fetching from Google Places: {}", e.getMessage(), e);
+        }
+
+        // Step 3: Limit results
+        if (limit != null && allStations.size() > limit) {
+            allStations = allStations.subList(0, limit);
+        }
+
+        log.info("Returning {} total stations", allStations.size());
+
+        return allStations.stream()
             .map(this::mapToResponse)
             .collect(Collectors.toList());
+    }
+
+    /**
+     * Try to match a Google Place with existing stations and enrich them
+     * If no match found, this could be a new station (future enhancement)
+     */
+    private void matchAndEnrichStation(List<Station> stations, GooglePlacesResponse.Place place) {
+        if (place.getGeometry() == null || place.getGeometry().getLocation() == null) {
+            return;
+        }
+
+        BigDecimal placeLat = place.getGeometry().getLocation().getLat();
+        BigDecimal placeLon = place.getGeometry().getLocation().getLng();
+
+        // Find closest station within 100m
+        double minDistance = 0.1; // ~100 meters in degrees
+        Station closest = null;
+
+        for (Station station : stations) {
+            if (station.getLatitude() == null || station.getLongitude() == null) {
+                continue;
+            }
+
+            double distance = calculateDistance(
+                station.getLatitude().doubleValue(),
+                station.getLongitude().doubleValue(),
+                placeLat.doubleValue(),
+                placeLon.doubleValue()
+            );
+
+            if (distance < minDistance) {
+                minDistance = distance;
+                closest = station;
+            }
+        }
+
+        if (closest != null) {
+            // Enrich existing station with Google data
+            externalStationMapper.enrichWithGooglePlaces(closest, place);
+            log.debug("Enriched station {} with Google Places data", closest.getName());
+        }
+        // Note: If no match found, we could create a new station from Google data
+        // This is a future enhancement
+    }
+
+    /**
+     * Calculate simple distance between two coordinates
+     * Returns distance in degrees (approximate)
+     */
+    private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+        double latDiff = lat1 - lat2;
+        double lonDiff = lon1 - lon2;
+        return Math.sqrt(latDiff * latDiff + lonDiff * lonDiff);
     }
 
     /**
