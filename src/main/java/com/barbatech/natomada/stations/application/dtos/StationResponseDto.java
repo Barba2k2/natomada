@@ -18,7 +18,6 @@ import java.util.List;
 @AllArgsConstructor
 public class StationResponseDto {
 
-    private Long id;
     private Integer ocmId;
     private String ocmUuid;
     private String googlePlaceId;
@@ -42,12 +41,10 @@ public class StationResponseDto {
     private Integer totalReviews;
     private String openingHours; // JSON string
     private Boolean isOpen24h;
-    private List<String> photoReferences; // List of Google Places photo references
+    private List<String> photoUrls; // List of complete photo URLs (Google Places)
     private LocalDateTime lastVerifiedAt;
     private Boolean isRecentlyVerified;
     private LocalDateTime lastSyncAt;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
 
     @Data
     @Builder
