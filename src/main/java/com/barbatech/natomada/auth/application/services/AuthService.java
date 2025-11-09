@@ -17,6 +17,7 @@ import com.barbatech.natomada.infrastructure.email.EmailService;
 import com.barbatech.natomada.infrastructure.events.auth.UserLoggedInEvent;
 import com.barbatech.natomada.infrastructure.events.auth.UserLoggedOutEvent;
 import com.barbatech.natomada.infrastructure.events.auth.UserRegisteredEvent;
+import com.barbatech.natomada.infrastructure.i18n.MessageSourceService;
 import com.barbatech.natomada.infrastructure.kafka.EventPublisher;
 import com.barbatech.natomada.infrastructure.sms.IntegrafluxSmsService;
 import lombok.RequiredArgsConstructor;
@@ -47,6 +48,7 @@ public class AuthService {
     private final EventPublisher eventPublisher;
     private final EmailService emailService;
     private final IntegrafluxSmsService smsService;
+    private final MessageSourceService messageService;
 
     /**
      * Register a new user
@@ -176,7 +178,7 @@ public class AuthService {
         // Check if expired
         if (refreshToken.isExpired()) {
             refreshTokenRepository.delete(refreshToken);
-            throw new InvalidTokenException("Refresh token expirado");
+            throw new InvalidTokenException(messageService.getMessage("token.refresh.expired"));
         }
 
         // Get user
@@ -242,7 +244,7 @@ public class AuthService {
             log.info("Password reset email sent to: {}", user.getEmail());
         } catch (Exception e) {
             log.error("Failed to send password reset email", e);
-            throw new RuntimeException("Falha ao enviar email de redefinição de senha");
+            throw new RuntimeException(messageService.getMessage("email.password.reset.failed"));
         }
 
         return MessageResponseDto.of("Email de redefinição de senha enviado com sucesso");
@@ -259,10 +261,10 @@ public class AuthService {
 
         if (!resetToken.isValid()) {
             if (resetToken.isUsed()) {
-                throw new InvalidTokenException("Token já foi utilizado");
+                throw new InvalidTokenException(messageService.getMessage("token.already.used"));
             }
             if (resetToken.isExpired()) {
-                throw new InvalidTokenException("Token expirado");
+                throw new InvalidTokenException(messageService.getMessage("token.expired"));
             }
         }
 
@@ -287,10 +289,10 @@ public class AuthService {
 
         if (!resetToken.isValid()) {
             if (resetToken.isUsed()) {
-                throw new InvalidTokenException("Token já foi utilizado");
+                throw new InvalidTokenException(messageService.getMessage("token.already.used"));
             }
             if (resetToken.isExpired()) {
-                throw new InvalidTokenException("Token expirado");
+                throw new InvalidTokenException(messageService.getMessage("token.expired"));
             }
         }
 
@@ -325,10 +327,10 @@ public class AuthService {
 
         // Validate recipient based on delivery method
         if (dto.getDeliveryMethod() == OtpDeliveryMethod.EMAIL && (dto.getEmail() == null || dto.getEmail().isBlank())) {
-            throw new IllegalArgumentException("Email é obrigatório para envio via EMAIL");
+            throw new IllegalArgumentException(messageService.getMessage("email.required.for.email.verification"));
         }
         if (dto.getDeliveryMethod() == OtpDeliveryMethod.SMS && (dto.getPhoneNumber() == null || dto.getPhoneNumber().isBlank())) {
-            throw new IllegalArgumentException("Número de telefone é obrigatório para envio via SMS");
+            throw new IllegalArgumentException(messageService.getMessage("sms.required.for.sms.verification"));
         }
 
         // Delete any existing OTPs for this recipient
@@ -419,10 +421,10 @@ public class AuthService {
 
         // Validate recipient based on delivery method
         if (dto.getDeliveryMethod() == OtpDeliveryMethod.EMAIL && (dto.getEmail() == null || dto.getEmail().isBlank())) {
-            throw new IllegalArgumentException("Email é obrigatório para verificação via EMAIL");
+            throw new IllegalArgumentException(messageService.getMessage("email.required.for.email.verification"));
         }
         if (dto.getDeliveryMethod() == OtpDeliveryMethod.SMS && (dto.getPhoneNumber() == null || dto.getPhoneNumber().isBlank())) {
-            throw new IllegalArgumentException("Número de telefone é obrigatório para verificação via SMS");
+            throw new IllegalArgumentException(messageService.getMessage("sms.required.for.sms.verification"));
         }
 
         // Find the latest valid OTP
@@ -441,7 +443,7 @@ public class AuthService {
 
         // Verify the OTP code
         if (!otpToken.getCode().equals(dto.getCode())) {
-            throw new InvalidTokenException("Código OTP incorreto");
+            throw new InvalidTokenException(messageService.getMessage("otp.invalid"));
         }
 
         // Mark OTP as verified
@@ -453,12 +455,12 @@ public class AuthService {
         if (dto.getDeliveryMethod() == OtpDeliveryMethod.EMAIL) {
             user = userRepository.findByEmail(dto.getEmail()).orElse(null);
             if (user == null) {
-                throw new UserNotFoundException("Email não cadastrado. Por favor, complete o cadastro.");
+                throw new UserNotFoundException(messageService.getMessage("user.email.not.registered"));
             }
         } else {
             user = userRepository.findByPhone(dto.getPhoneNumber()).orElse(null);
             if (user == null) {
-                throw new UserNotFoundException("Número de telefone não cadastrado. Por favor, complete o cadastro.");
+                throw new UserNotFoundException(messageService.getMessage("user.phone.not.registered"));
             }
         }
 
