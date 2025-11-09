@@ -26,6 +26,30 @@ public class StationsController {
     private final StationsService stationsService;
 
     /**
+     * Get station by ID
+     * GET /api/stations/{id}
+     */
+    @Operation(
+        summary = "Buscar estação por ID",
+        description = "Retorna detalhes completos de uma estação específica, incluindo fotos e avaliações do Google Places"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Estação encontrada com sucesso"),
+        @ApiResponse(responseCode = "404", description = "Estação não encontrada")
+    })
+    @GetMapping("/{id}")
+    public ResponseEntity<StationDetailResponse> getStationById(
+        @Parameter(description = "ID da estação (pode ser ocm_123 ou external ID)", example = "ocm_217270", required = true)
+        @PathVariable String id
+    ) {
+        StationResponseDto station = stationsService.getStationById(id);
+
+        return ResponseEntity.ok(StationDetailResponse.builder()
+            .data(station)
+            .build());
+    }
+
+    /**
      * Get nearby stations
      * GET /api/stations/nearby?latitude=-23.5629&longitude=-46.6544&radius=5000&limit=20
      */
@@ -75,6 +99,14 @@ public class StationsController {
     }
 
     // Response wrapper classes
+    @lombok.Data
+    @lombok.Builder
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class StationDetailResponse {
+        private StationResponseDto data;
+    }
+
     @lombok.Data
     @lombok.Builder
     @lombok.NoArgsConstructor
