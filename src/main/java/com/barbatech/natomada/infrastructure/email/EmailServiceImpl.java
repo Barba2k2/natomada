@@ -1,5 +1,6 @@
 package com.barbatech.natomada.infrastructure.email;
 
+import com.barbatech.natomada.infrastructure.i18n.MessageSourceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 public class EmailServiceImpl implements EmailService {
 
     private final JavaMailSender mailSender;
+    private final MessageSourceService messageService;
 
     @Value("${app.email.from:noreply@natomada.com}")
     private String fromEmail;
@@ -38,7 +40,7 @@ public class EmailServiceImpl implements EmailService {
             log.info("Password reset email sent to: {}", to);
         } catch (Exception e) {
             log.error("Failed to send password reset email to: {}", to, e);
-            throw new RuntimeException("Falha ao enviar email de redefinição de senha", e);
+            throw new RuntimeException(messageService.getMessage("email.password.reset.failed"), e);
         }
     }
 
@@ -72,7 +74,7 @@ public class EmailServiceImpl implements EmailService {
             log.info("Email verification sent to: {}", to);
         } catch (Exception e) {
             log.error("Failed to send email verification to: {}", to, e);
-            throw new RuntimeException("Falha ao enviar email de verificação", e);
+            throw new RuntimeException(messageService.getMessage("email.verification.failed"), e);
         }
     }
 
@@ -148,7 +150,7 @@ public class EmailServiceImpl implements EmailService {
             log.info("Email sent to: {}", to);
         } catch (Exception e) {
             log.error("Failed to send email to: {}", to, e);
-            throw new RuntimeException("Falha ao enviar email", e);
+            throw new RuntimeException(messageService.getMessage("email.send.failed"), e);
         }
     }
 }

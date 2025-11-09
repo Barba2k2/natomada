@@ -1,5 +1,6 @@
 package com.barbatech.natomada.infrastructure.sms;
 
+import com.barbatech.natomada.infrastructure.i18n.MessageSourceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
@@ -20,6 +21,7 @@ public class IntegrafluxSmsService {
 
     private final SmsProperties smsProperties;
     private final RestTemplate restTemplate;
+    private final MessageSourceService messageService;
 
     /**
      * Send SMS using Integraflux API
@@ -36,7 +38,7 @@ public class IntegrafluxSmsService {
 
         if (smsProperties.getToken() == null || smsProperties.getToken().isBlank()) {
             log.error("Integraflux API token is not configured");
-            throw new RuntimeException("SMS service not configured. Please set sms.integraflux.token property");
+            throw new RuntimeException(messageService.getMessage("sms.not.configured"));
         }
 
         try {
@@ -75,12 +77,12 @@ public class IntegrafluxSmsService {
             } else {
                 log.error("Failed to send SMS. Status: {}, Response: {}",
                     response.getStatusCode(), response.getBody());
-                throw new RuntimeException("Failed to send SMS: " + response.getStatusCode());
+                throw new RuntimeException(messageService.getMessage("sms.send.failed"));
             }
 
         } catch (Exception e) {
             log.error("Error sending SMS to {}: {}", phoneNumber, e.getMessage(), e);
-            throw new RuntimeException("Failed to send SMS: " + e.getMessage(), e);
+            throw new RuntimeException(messageService.getMessage("sms.send.failed"), e);
         }
     }
 

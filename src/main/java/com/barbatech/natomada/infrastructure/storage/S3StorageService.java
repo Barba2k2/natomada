@@ -1,6 +1,7 @@
 package com.barbatech.natomada.infrastructure.storage;
 
 import com.barbatech.natomada.infrastructure.config.AwsProperties;
+import com.barbatech.natomada.infrastructure.i18n.MessageSourceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ public class S3StorageService {
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
     private final AwsProperties awsProperties;
+    private final MessageSourceService messageService;
 
     /**
      * Upload a file to S3
@@ -53,7 +55,7 @@ public class S3StorageService {
 
         } catch (IOException e) {
             log.error("Error uploading file to S3", e);
-            throw new RuntimeException("Erro ao fazer upload do arquivo", e);
+            throw new RuntimeException(messageService.getMessage("file.upload.failed"), e);
         }
     }
 
@@ -74,7 +76,7 @@ public class S3StorageService {
 
         } catch (S3Exception e) {
             log.error("Error deleting file from S3: {}", key, e);
-            throw new RuntimeException("Erro ao deletar arquivo do S3", e);
+            throw new RuntimeException(messageService.getMessage("file.delete.failed"), e);
         }
     }
 
@@ -101,7 +103,7 @@ public class S3StorageService {
 
         } catch (S3Exception e) {
             log.error("Error generating presigned URL for key: {}", key, e);
-            throw new RuntimeException("Erro ao gerar URL do arquivo", e);
+            throw new RuntimeException(messageService.getMessage("file.url.generation.failed"), e);
         }
     }
 
