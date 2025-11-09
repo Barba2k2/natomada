@@ -49,14 +49,6 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, "/api/auth/validate-reset-token").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/auth/reset-password").permitAll()
 
-                // Public endpoints - Stations (read-only)
-                .requestMatchers(HttpMethod.GET, "/api/stations/nearby").permitAll()
-
-                // Public endpoints - Cars Catalog (read-only)
-                .requestMatchers(HttpMethod.GET, "/api/cars/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/cars/brands").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/cars/body-types").permitAll()
-
                 // Actuator endpoints
                 .requestMatchers("/actuator/health", "/actuator/info", "/actuator/**").permitAll()
 
