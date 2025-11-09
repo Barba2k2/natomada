@@ -12,6 +12,7 @@ import com.barbatech.natomada.stations.infrastructure.repositories.FavoriteRepos
 import com.barbatech.natomada.stations.infrastructure.repositories.StationRepository;
 import com.barbatech.natomada.infrastructure.events.stations.StationFavoritedEvent;
 import com.barbatech.natomada.infrastructure.events.stations.StationUnfavoritedEvent;
+import com.barbatech.natomada.infrastructure.i18n.MessageSourceService;
 import com.barbatech.natomada.infrastructure.kafka.EventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,6 +34,7 @@ public class FavoritesService {
     private final StationRepository stationRepository;
     private final UserRepository userRepository;
     private final EventPublisher eventPublisher;
+    private final MessageSourceService messageService;
 
     /**
      * Get all favorites for a user
@@ -104,7 +106,7 @@ public class FavoritesService {
 
         // Check if favorite exists
         if (!favoriteRepository.existsByUserIdAndStationId(userId, stationId)) {
-            throw new IllegalArgumentException("Estação não está nos favoritos");
+            throw new IllegalArgumentException(messageService.getMessage("station.not.in.favorites"));
         }
 
         favoriteRepository.deleteByUserIdAndStationId(userId, stationId);
@@ -156,7 +158,6 @@ public class FavoritesService {
      */
     private StationResponseDto mapStationToResponse(Station station) {
         return StationResponseDto.builder()
-            .id(station.getId())
             .ocmId(station.getOcmId())
             .ocmUuid(station.getOcmUuid())
             .googlePlaceId(station.getGooglePlaceId())
@@ -199,8 +200,6 @@ public class FavoritesService {
             .lastVerifiedAt(station.getLastVerifiedAt())
             .isRecentlyVerified(station.getIsRecentlyVerified())
             .lastSyncAt(station.getLastSyncAt())
-            .createdAt(station.getCreatedAt())
-            .updatedAt(station.getUpdatedAt())
             .build();
     }
 

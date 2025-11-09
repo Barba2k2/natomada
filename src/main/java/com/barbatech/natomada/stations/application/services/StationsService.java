@@ -1,5 +1,6 @@
 package com.barbatech.natomada.stations.application.services;
 
+import com.barbatech.natomada.infrastructure.i18n.MessageSourceService;
 import com.barbatech.natomada.stations.application.dtos.StationResponseDto;
 import com.barbatech.natomada.stations.domain.entities.Station;
 import com.barbatech.natomada.stations.infrastructure.external.ExternalStationMapper;
@@ -12,6 +13,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +34,10 @@ public class StationsService {
     private final GooglePlacesService googlePlacesService;
     private final ExternalStationMapper externalStationMapper;
     private final ObjectMapper objectMapper;
+    private final MessageSourceService messageService;
+
+    @Value("${google.places.api.key}")
+    private String googlePlacesApiKey;
 
     /**
      * Get nearby stations from external APIs (OpenChargeMap + Google Places)
@@ -162,21 +168,25 @@ public class StationsService {
      * Map Station entity to response DTO
      */
     private StationResponseDto mapToResponse(Station station) {
-        // Parse photo references from JSON
-        List<String> photoRefs = new ArrayList<>();
+        // Parse photo references from JSON and convert to URLs
+        List<String> photoUrls = new ArrayList<>();
         if (station.getPhotoReferences() != null) {
             try {
-                photoRefs = objectMapper.readValue(
+                List<String> photoRefs = objectMapper.readValue(
                     station.getPhotoReferences(),
                     new TypeReference<List<String>>() {}
                 );
+
+                // Convert photo references to complete URLs
+                photoUrls = photoRefs.stream()
+                    .map(this::buildPhotoUrl)
+                    .collect(Collectors.toList());
             } catch (Exception e) {
                 log.warn("Error parsing photo references for station {}: {}", station.getName(), e.getMessage());
             }
         }
 
         return StationResponseDto.builder()
-            .id(station.getId())
             .ocmId(station.getOcmId())
             .ocmUuid(station.getOcmUuid())
             .googlePlaceId(station.getGooglePlaceId())
@@ -216,12 +226,88 @@ public class StationsService {
             .totalReviews(station.getTotalReviews())
             .openingHours(station.getOpeningHours())
             .isOpen24h(station.getIsOpen24h())
-            .photoReferences(photoRefs)
+            .photoUrls(photoUrls)
             .lastVerifiedAt(station.getLastVerifiedAt())
             .isRecentlyVerified(station.getIsRecentlyVerified())
             .lastSyncAt(station.getLastSyncAt())
-            .createdAt(station.getCreatedAt())
-            .updatedAt(station.getUpdatedAt())
             .build();
+    }
+
+    /**
+     * Get station by ID from external APIs (OpenChargeMap + Google Places)
+     *
+     * @param stationId The station ID (format: "ocm_123456")
+     * @return Station details
+     */
+    public StationResponseDto getStationById(String stationId) {
+        log.info("Fetching station by ID from external APIs: {}", stationId);
+
+        // Parse OCM ID from external ID format (e.g., "ocm_188927" -> 188927)
+        Integer ocmId;
+        try {
+            ocmId = Integer.parseInt(stationId.replace("ocm_", ""));
+        } catch (NumberFormatException e) {
+            log.error("Invalid station ID format: {}", stationId);
+            throw new RuntimeException(messageService.getMessage("station.id.invalid"));
+        }
+
+        // Fetch from OpenChargeMap API
+        OpenChargeMapResponse ocmStation = openChargeMapService.getById(ocmId);
+        if (ocmStation == null) {
+            log.error("Station not found in OpenChargeMap: {}", stationId);
+            throw new RuntimeException(messageService.getMessage("station.not.found"));
+        }
+
+        // Convert to Station entity
+        Station station = externalStationMapper.fromOpenChargeMap(ocmStation);
+
+        // Try to enrich with Google Places data if we have coordinates
+        if (station.getLatitude() != null && station.getLongitude() != null) {
+            try {
+                GooglePlacesResponse googleResponse = googlePlacesService.searchNearby(
+                    station.getLatitude().doubleValue(),
+                    station.getLongitude().doubleValue(),
+                    100 // 100 meters radius for detail lookup
+                );
+
+                if (googleResponse.getResults() != null && !googleResponse.getResults().isEmpty()) {
+                    // Find closest match
+                    for (GooglePlacesResponse.Place place : googleResponse.getResults()) {
+                        if (place.getGeometry() != null && place.getGeometry().getLocation() != null) {
+                            double distance = calculateDistance(
+                                station.getLatitude().doubleValue(),
+                                station.getLongitude().doubleValue(),
+                                place.getGeometry().getLocation().getLat().doubleValue(),
+                                place.getGeometry().getLocation().getLng().doubleValue()
+                            );
+
+                            // If within 50 meters, consider it a match
+                            if (distance < 0.05) {
+                                externalStationMapper.enrichWithGooglePlaces(station, place);
+                                log.info("Enriched station with Google Places data");
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Could not enrich station with Google Places data: {}", e.getMessage());
+            }
+        }
+
+        log.info("Found station from APIs: {}", station.getName());
+
+        return mapToResponse(station);
+    }
+
+    /**
+     * Build complete Google Places Photo URL from photo reference
+     */
+    private String buildPhotoUrl(String photoReference) {
+        return String.format(
+            "https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=%s&key=%s",
+            photoReference,
+            googlePlacesApiKey
+        );
     }
 }
