@@ -21,7 +21,6 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "stations", indexes = {
-    @Index(name = "idx_station_external_id", columnList = "external_id"),
     @Index(name = "idx_station_ocm_id", columnList = "ocm_id"),
     @Index(name = "idx_station_location", columnList = "latitude, longitude")
 })
@@ -36,17 +35,14 @@ public class Station {
     private Long id;
 
     // External IDs
-    @Column(name = "ocm_id")
-    private Integer ocmId;
+    @Column(name = "ocm_id", nullable = false, unique = true, length = 255)
+    private String ocmId;
 
     @Column(name = "ocm_uuid", length = 100)
     private String ocmUuid;
 
     @Column(name = "google_place_id", length = 255)
     private String googlePlaceId;
-
-    @Column(name = "external_id", nullable = false, unique = true, length = 255)
-    private String externalId;
 
     // Basic Information
     @Column(nullable = false, length = 255)

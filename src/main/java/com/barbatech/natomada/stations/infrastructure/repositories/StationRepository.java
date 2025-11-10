@@ -17,14 +17,9 @@ import java.util.Optional;
 public interface StationRepository extends JpaRepository<Station, Long> {
 
     /**
-     * Find station by external ID
+     * Find station by OCM ID (format: ocm_123456)
      */
-    Optional<Station> findByExternalId(String externalId);
-
-    /**
-     * Find station by OCM ID
-     */
-    Optional<Station> findByOcmId(Integer ocmId);
+    Optional<Station> findByOcmId(String ocmId);
 
     /**
      * Find nearby stations using bounding box
@@ -42,7 +37,7 @@ public interface StationRepository extends JpaRepository<Station, Long> {
     );
 
     /**
-     * Check if station exists by external ID
+     * Check if station exists by OCM ID
      */
-    boolean existsByExternalId(String externalId);
+    boolean existsByOcmId(String ocmId);
 }
