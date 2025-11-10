@@ -161,7 +161,6 @@ public class FavoritesService {
             .ocmId(station.getOcmId())
             .ocmUuid(station.getOcmUuid())
             .googlePlaceId(station.getGooglePlaceId())
-            .externalId(station.getExternalId())
             .name(station.getName())
             .address(station.getAddress())
             .city(station.getCity())
