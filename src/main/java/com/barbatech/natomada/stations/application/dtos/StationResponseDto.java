@@ -18,10 +18,9 @@ import java.util.List;
 @AllArgsConstructor
 public class StationResponseDto {
 
-    private Integer ocmId;
+    private String ocmId;
     private String ocmUuid;
     private String googlePlaceId;
-    private String externalId;
     private String name;
     private String address;
     private String city;
