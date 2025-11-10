@@ -32,11 +32,8 @@ public class ExternalStationMapper {
     public Station fromOpenChargeMap(OpenChargeMapResponse ocm) {
         Station station = new Station();
 
-        // External ID (required field)
-        station.setExternalId("ocm_" + ocm.getId());
-
         // IDs
-        station.setOcmId(ocm.getId() != null ? ocm.getId().intValue() : null);
+        station.setOcmId(ocm.getId() != null ? "ocm_" + ocm.getId() : null);
         station.setOcmUuid(ocm.getUuid());
 
         // Basic info
