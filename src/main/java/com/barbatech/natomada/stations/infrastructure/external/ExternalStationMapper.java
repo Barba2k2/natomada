@@ -1,7 +1,9 @@
 package com.barbatech.natomada.stations.infrastructure.external;
 
 import com.barbatech.natomada.stations.domain.entities.Station;
+import com.barbatech.natomada.stations.infrastructure.external.google.AmenityMapper;
 import com.barbatech.natomada.stations.infrastructure.external.google.dtos.GooglePlacesResponse;
+import com.barbatech.natomada.stations.infrastructure.external.google.dtos.PlacesV1Response;
 import com.barbatech.natomada.stations.infrastructure.external.opencm.dtos.OpenChargeMapResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,6 +27,7 @@ import java.util.Map;
 public class ExternalStationMapper {
 
     private final ObjectMapper objectMapper;
+    private final AmenityMapper amenityMapper;
 
     /**
      * Convert OpenChargeMap response to Station entity
@@ -139,6 +142,7 @@ public class ExternalStationMapper {
         }
 
         // Photo references
+        log.debug("Processing photos for station {}: photos={}", station.getName(), place.getPhotos());
         if (place.getPhotos() != null && !place.getPhotos().isEmpty()) {
             try {
                 List<String> photoRefs = new ArrayList<>();
@@ -150,14 +154,287 @@ public class ExternalStationMapper {
                         photoRefs.add(photoRef);
                     }
                 }
-                station.setPhotoReferences(objectMapper.writeValueAsString(photoRefs));
-                log.debug("Stored {} photo references for station {}", photoRefs.size(), station.getName());
+                if (photoRefs.isEmpty()) {
+                    log.info("Google returned {} photos but all photo_reference fields were null for station {}", place.getPhotos().size(), station.getName());
+                } else {
+                    station.setPhotoReferences(objectMapper.writeValueAsString(photoRefs));
+                    log.info("Stored {} photo references for station {}", photoRefs.size(), station.getName());
+                }
+            } catch (JsonProcessingException e) {
+                log.error("Error converting photo references to JSON", e);
+            }
+        } else {
+            log.info("No photos available from Google Places for station {} (place_id: {})", station.getName(), place.getPlaceId());
+        }
+
+        // Extract amenities from types
+        if (place.getTypes() != null && !place.getTypes().isEmpty()) {
+            try {
+                List<String> amenities = amenityMapper.mapTypesToAmenities(place.getTypes());
+                if (!amenities.isEmpty()) {
+                    station.setAmenities(objectMapper.writeValueAsString(amenities));
+                    log.info("Extracted {} amenities for station {}: {}", amenities.size(), station.getName(), amenities);
+                }
+            } catch (JsonProcessingException e) {
+                log.error("Error converting amenities to JSON for station {}", station.getName(), e);
+            }
+        }
+
+        log.debug("✅ Enriched station {} with Google Places data [UPDATED CODE]", station.getName());
+    }
+
+    /**
+     * Enrich station with Google Places API v1 data (includes EV connector information)
+     */
+    public void enrichWithGooglePlacesV1(Station station, PlacesV1Response.Place place) {
+        if (place == null) return;
+
+        station.setGooglePlaceId(place.getId());
+
+        // If name is missing, use Google's
+        if (station.getName() == null || station.getName().isEmpty()) {
+            if (place.getDisplayName() != null) {
+                station.setName(place.getDisplayName().getText());
+            }
+        }
+
+        // Rating
+        if (place.getRating() != null) {
+            station.setGoogleRating(place.getRating());
+        }
+        station.setGoogleReviewCount(place.getUserRatingCount() != null ? place.getUserRatingCount() : 0);
+
+        // Calculate combined rating
+        updateCombinedRating(station);
+
+        // Opening hours
+        if (place.getCurrentOpeningHours() != null && place.getCurrentOpeningHours().getWeekdayDescriptions() != null) {
+            try {
+                station.setOpeningHours(objectMapper.writeValueAsString(place.getCurrentOpeningHours().getWeekdayDescriptions()));
+            } catch (JsonProcessingException e) {
+                log.error("Error converting opening hours to JSON", e);
+            }
+        }
+
+        // Photo references - Places API v1 uses different photo format
+        if (place.getPhotos() != null && !place.getPhotos().isEmpty()) {
+            try {
+                List<String> photoRefs = new ArrayList<>();
+                // Get up to 5 photos
+                int maxPhotos = Math.min(place.getPhotos().size(), 5);
+                for (int i = 0; i < maxPhotos; i++) {
+                    PlacesV1Response.Photo photo = place.getPhotos().get(i);
+                    if (photo.getName() != null) {
+                        // Store the photo name (format: places/{place_id}/photos/{photo_reference})
+                        photoRefs.add(photo.getName());
+                    }
+                }
+                if (!photoRefs.isEmpty()) {
+                    station.setPhotoReferences(objectMapper.writeValueAsString(photoRefs));
+                    log.info("Stored {} photo references from Places v1 for station {}", photoRefs.size(), station.getName());
+                }
             } catch (JsonProcessingException e) {
                 log.error("Error converting photo references to JSON", e);
             }
         }
 
-        log.debug("Enriched station {} with Google Places data", station.getName());
+        // Extract amenities from types
+        if (place.getTypes() != null && !place.getTypes().isEmpty()) {
+            try {
+                List<String> amenities = amenityMapper.mapTypesToAmenities(place.getTypes());
+                if (!amenities.isEmpty()) {
+                    station.setAmenities(objectMapper.writeValueAsString(amenities));
+                    log.info("Extracted {} amenities for station {}: {}", amenities.size(), station.getName(), amenities);
+                }
+            } catch (JsonProcessingException e) {
+                log.error("Error converting amenities to JSON for station {}", station.getName(), e);
+            }
+        }
+
+        // EV Connector information from Places API v1
+        if (place.getEvChargeOptions() != null) {
+            mergeEvConnectorData(station, place.getEvChargeOptions());
+        }
+
+        log.info("✅ Enriched station {} with Google Places v1 data (including EV connectors)", station.getName());
+    }
+
+    /**
+     * Merge EV connector data from Google Places v1 with existing OpenChargeMap connector data
+     */
+    private void mergeEvConnectorData(Station station, PlacesV1Response.EVChargeOptions evOptions) {
+        try {
+            log.info("Merging EV connector data from Google Places v1 for station: {}", station.getName());
+            log.debug("Total connectors from Google: {}", evOptions.getConnectorCount());
+
+            if (evOptions.getConnectorAggregation() == null || evOptions.getConnectorAggregation().isEmpty()) {
+                log.debug("No connector aggregation data available from Google Places v1");
+                return;
+            }
+
+            // Parse existing connectors from OpenChargeMap
+            List<Map<String, Object>> existingConnectors = new ArrayList<>();
+            if (station.getConnectors() != null && !station.getConnectors().isEmpty() && !station.getConnectors().equals("[]")) {
+                try {
+                    existingConnectors = objectMapper.readValue(
+                        station.getConnectors(),
+                        objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class)
+                    );
+                } catch (JsonProcessingException e) {
+                    log.warn("Could not parse existing connectors for station {}: {}", station.getName(), e.getMessage());
+                }
+            }
+
+            // Create a map of connector type to Google data for easier lookup
+            Map<String, PlacesV1Response.ConnectorAggregation> googleConnectorMap = new HashMap<>();
+            for (PlacesV1Response.ConnectorAggregation connector : evOptions.getConnectorAggregation()) {
+                String normalizedType = normalizeConnectorType(connector.getType());
+                googleConnectorMap.put(normalizedType, connector);
+                log.debug("Google connector: type={}, count={}, available={}, maxCharge={}kW",
+                    normalizedType, connector.getCount(), connector.getAvailableCount(), connector.getMaxChargeRateKw());
+            }
+
+            // Enrich existing connectors with Google data
+            for (Map<String, Object> connector : existingConnectors) {
+                String type = connector.get("type") != null ? connector.get("type").toString() : null;
+                if (type != null) {
+                    String normalizedType = normalizeConnectorTypeFromOCM(type);
+                    PlacesV1Response.ConnectorAggregation googleData = googleConnectorMap.get(normalizedType);
+
+                    if (googleData != null) {
+                        // Enrich with Google data
+                        connector.put("availableCount", googleData.getAvailableCount());
+                        connector.put("outOfServiceCount", googleData.getOutOfServiceCount());
+                        if (googleData.getMaxChargeRateKw() != null) {
+                            connector.put("maxChargeRateKw", googleData.getMaxChargeRateKw());
+                        }
+                        connector.put("availabilityLastUpdate", googleData.getAvailabilityLastUpdateTime());
+                        log.debug("Enriched OCM connector {} with Google Places v1 data", type);
+                    }
+                }
+            }
+
+            // Add any Google connectors that weren't in OpenChargeMap
+            for (PlacesV1Response.ConnectorAggregation googleConnector : evOptions.getConnectorAggregation()) {
+                String normalizedType = normalizeConnectorType(googleConnector.getType());
+
+                // Check if this connector already exists in OCM data
+                boolean exists = existingConnectors.stream()
+                    .anyMatch(c -> {
+                        String type = c.get("type") != null ? c.get("type").toString() : "";
+                        return normalizedType.equalsIgnoreCase(normalizeConnectorTypeFromOCM(type));
+                    });
+
+                if (!exists) {
+                    // Add new connector from Google
+                    Map<String, Object> newConnector = new HashMap<>();
+                    newConnector.put("type", normalizedType);
+                    newConnector.put("source", "google_places_v1");
+                    newConnector.put("quantity", googleConnector.getCount());
+                    newConnector.put("availableCount", googleConnector.getAvailableCount());
+                    newConnector.put("outOfServiceCount", googleConnector.getOutOfServiceCount());
+                    if (googleConnector.getMaxChargeRateKw() != null) {
+                        newConnector.put("maxChargeRateKw", googleConnector.getMaxChargeRateKw());
+                        newConnector.put("powerKW", googleConnector.getMaxChargeRateKw().doubleValue());
+                    }
+                    newConnector.put("availabilityLastUpdate", googleConnector.getAvailabilityLastUpdateTime());
+                    existingConnectors.add(newConnector);
+                    log.info("Added new connector from Google Places v1: {}", normalizedType);
+                }
+            }
+
+            // Update station with merged connector data
+            if (!existingConnectors.isEmpty()) {
+                station.setConnectors(objectMapper.writeValueAsString(existingConnectors));
+
+                // Update total connector count
+                int totalCount = existingConnectors.stream()
+                    .mapToInt(c -> {
+                        Object qty = c.get("quantity");
+                        if (qty instanceof Integer) return (Integer) qty;
+                        if (qty instanceof String) {
+                            try {
+                                return Integer.parseInt((String) qty);
+                            } catch (NumberFormatException e) {
+                                return 1;
+                            }
+                        }
+                        return 1;
+                    })
+                    .sum();
+                station.setTotalConnectors(totalCount);
+
+                log.info("Successfully merged {} connectors for station {} (total: {})",
+                    existingConnectors.size(), station.getName(), totalCount);
+            }
+        } catch (Exception e) {
+            log.error("Error merging EV connector data for station {}: {}", station.getName(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Normalize Google Places connector type to standardized format
+     * Maps from EV_CONNECTOR_TYPE_J1772 -> J1772
+     */
+    private String normalizeConnectorType(String googleType) {
+        if (googleType == null) return "Unknown";
+
+        // Remove EV_CONNECTOR_TYPE_ prefix
+        String normalized = googleType.replace("EV_CONNECTOR_TYPE_", "");
+
+        // Map specific types
+        switch (normalized) {
+            case "TYPE_2":
+                return "Type 2 (Mennekes)";
+            case "CCS_COMBO_1":
+                return "CCS (Type 1)";
+            case "CCS_COMBO_2":
+                return "CCS (Type 2)";
+            case "J1772":
+                return "Type 1 (J1772)";
+            case "CHADEMO":
+                return "CHAdeMO";
+            case "TESLA":
+                return "Tesla";
+            case "NACS":
+                return "NACS";
+            case "GB_T":
+                return "GB/T";
+            case "WALL_OUTLET":
+                return "Wall Outlet";
+            default:
+                return normalized;
+        }
+    }
+
+    /**
+     * Normalize OpenChargeMap connector type to match Google format
+     */
+    private String normalizeConnectorTypeFromOCM(String ocmType) {
+        if (ocmType == null) return "Unknown";
+
+        String lower = ocmType.toLowerCase();
+
+        // Map OCM types to standardized format
+        if (lower.contains("type 2") || lower.contains("mennekes")) {
+            return "Type 2 (Mennekes)";
+        } else if (lower.contains("ccs") && (lower.contains("type 1") || lower.contains("combo 1"))) {
+            return "CCS (Type 1)";
+        } else if (lower.contains("ccs") && (lower.contains("type 2") || lower.contains("combo 2"))) {
+            return "CCS (Type 2)";
+        } else if (lower.contains("type 1") || lower.contains("j1772")) {
+            return "Type 1 (J1772)";
+        } else if (lower.contains("chademo")) {
+            return "CHAdeMO";
+        } else if (lower.contains("tesla")) {
+            return "Tesla";
+        } else if (lower.contains("nacs")) {
+            return "NACS";
+        } else if (lower.contains("gb/t") || lower.contains("gbt")) {
+            return "GB/T";
+        }
+
+        return ocmType; // Return original if no match
     }
 
     /**
