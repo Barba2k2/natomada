@@ -167,8 +167,8 @@ public class StationsService {
         BigDecimal placeLat = place.getLocation().getLatitude();
         BigDecimal placeLon = place.getLocation().getLongitude();
 
-        // Find closest station within 100m
-        double minDistance = 0.1; // ~100 meters in degrees
+        // Find closest station within 150m (same as detail view)
+        double minDistance = 0.15; // ~150 meters in degrees
         Station closest = null;
 
         for (Station station : stations) {
@@ -319,49 +319,31 @@ public class StationsService {
         // Convert to Station entity
         Station station = externalStationMapper.fromOpenChargeMap(ocmStation);
 
-        // Check if we have a cached Google Place ID from previous lookups
-        Station cachedStation = stationRepository.findByOcmId(stationId).orElse(null);
-        String googlePlaceId = cachedStation != null ? cachedStation.getGooglePlaceId() : null;
-
         // Try to enrich with Google Places data
         boolean enriched = false;
 
-        // Strategy 1: If we have a Google Place ID, use Place Details API (most accurate)
-        if (googlePlaceId != null && !googlePlaceId.isEmpty()) {
+        // Always try Places API v1 for EV connector data (has availability info)
+        if (station.getLatitude() != null && station.getLongitude() != null) {
             try {
-                log.info("Using cached Google Place ID: {}", googlePlaceId);
-                GooglePlacesResponse.Place placeDetails = googlePlacesService.getPlaceDetailsAsPlace(googlePlaceId);
-                if (placeDetails != null) {
-                    externalStationMapper.enrichWithGooglePlaces(station, placeDetails);
-                    enriched = true;
-                    log.info("Enriched station with Google Place Details API");
-                }
-            } catch (Exception e) {
-                log.warn("Could not fetch Google Place Details for ID {}: {}", googlePlaceId, e.getMessage());
-            }
-        }
-
-        // Strategy 2: If not enriched yet and we have coordinates, try nearby search
-        if (!enriched && station.getLatitude() != null && station.getLongitude() != null) {
-            try {
-                GooglePlacesResponse googleResponse = googlePlacesService.searchNearby(
+                log.info("Trying Places API v1 nearby search for station details");
+                PlacesV1Response placesV1Response = googlePlacesService.searchNearbyV1(
                     station.getLatitude().doubleValue(),
                     station.getLongitude().doubleValue(),
-                    150 // 150 meters radius for detail lookup (increased from 100)
+                    150 // 150 meters radius for detail lookup
                 );
 
-                if (googleResponse.getResults() != null && !googleResponse.getResults().isEmpty()) {
+                if (placesV1Response != null && placesV1Response.getPlaces() != null && !placesV1Response.getPlaces().isEmpty()) {
                     // Find closest match
                     double minDistance = Double.MAX_VALUE;
-                    GooglePlacesResponse.Place closestPlace = null;
+                    PlacesV1Response.Place closestPlace = null;
 
-                    for (GooglePlacesResponse.Place place : googleResponse.getResults()) {
-                        if (place.getGeometry() != null && place.getGeometry().getLocation() != null) {
+                    for (PlacesV1Response.Place place : placesV1Response.getPlaces()) {
+                        if (place.getLocation() != null && place.getLocation().getLatitude() != null && place.getLocation().getLongitude() != null) {
                             double distance = calculateDistance(
                                 station.getLatitude().doubleValue(),
                                 station.getLongitude().doubleValue(),
-                                place.getGeometry().getLocation().getLat().doubleValue(),
-                                place.getGeometry().getLocation().getLng().doubleValue()
+                                place.getLocation().getLatitude().doubleValue(),
+                                place.getLocation().getLongitude().doubleValue()
                             );
 
                             if (distance < minDistance) {
@@ -371,41 +353,20 @@ public class StationsService {
                         }
                     }
 
-                    // If within 100 meters, consider it a match
-                    if (closestPlace != null && minDistance < 0.1) {
-                        // Fetch full place details to get ratings and photos
-                        String placeId = closestPlace.getPlaceId();
-                        if (placeId != null) {
-                            try {
-                                GooglePlacesResponse.Place placeDetails = googlePlacesService.getPlaceDetailsAsPlace(placeId);
-                                if (placeDetails != null) {
-                                    externalStationMapper.enrichWithGooglePlaces(station, placeDetails);
-                                    enriched = true;
-                                    log.info("Enriched station with Google Place Details from nearby match (distance: {}m)", minDistance * 111000);
+                    // If within 150 meters, consider it a match (same threshold as list view)
+                    if (closestPlace != null && minDistance < 0.15) {
+                        externalStationMapper.enrichWithGooglePlacesV1(station, closestPlace);
+                        enriched = true;
+                        log.info("Enriched station with Google Places v1 API (distance: {}m)", minDistance * 111000);
 
-                                    // If no photos available, try to find nearby business with photos
-                                    if (station.getPhotoReferences() == null || station.getPhotoReferences().equals("[]")) {
-                                        tryEnrichWithNearbyBusinessPhotos(station);
-                                    }
-                                } else {
-                                    // Fallback to nearby search result if details fetch fails
-                                    externalStationMapper.enrichWithGooglePlaces(station, closestPlace);
-                                    enriched = true;
-                                    log.info("Enriched station with Google Places nearby search result (distance: {}m)", minDistance * 111000);
-                                }
-                            } catch (Exception detailsError) {
-                                log.warn("Could not fetch Place Details for {}: {}. Using nearby search result.", placeId, detailsError.getMessage());
-                                externalStationMapper.enrichWithGooglePlaces(station, closestPlace);
-                                enriched = true;
-                            }
-                        } else {
-                            externalStationMapper.enrichWithGooglePlaces(station, closestPlace);
-                            enriched = true;
+                        // If no photos available, try to find nearby business with photos
+                        if (station.getPhotoReferences() == null || station.getPhotoReferences().equals("[]")) {
+                            tryEnrichWithNearbyBusinessPhotos(station);
                         }
                     }
                 }
             } catch (Exception e) {
-                log.warn("Could not enrich station with Google Places nearby search: {}", e.getMessage());
+                log.warn("Could not enrich station with Google Places v1 nearby search: {}", e.getMessage());
             }
         }
 
