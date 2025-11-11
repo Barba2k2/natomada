@@ -6,6 +6,7 @@ import com.barbatech.natomada.stations.domain.entities.Station;
 import com.barbatech.natomada.stations.infrastructure.external.ExternalStationMapper;
 import com.barbatech.natomada.stations.infrastructure.external.google.GooglePlacesService;
 import com.barbatech.natomada.stations.infrastructure.external.google.dtos.GooglePlacesResponse;
+import com.barbatech.natomada.stations.infrastructure.external.google.dtos.PlacesV1Response;
 import com.barbatech.natomada.stations.infrastructure.external.opencm.OpenChargeMapService;
 import com.barbatech.natomada.stations.infrastructure.external.opencm.dtos.OpenChargeMapResponse;
 import com.barbatech.natomada.stations.infrastructure.repositories.StationRepository;
@@ -79,24 +80,24 @@ public class StationsService {
             log.error("Error fetching from OpenChargeMap: {}", e.getMessage(), e);
         }
 
-        // Step 2: Fetch from Google Places (enrichment source)
+        // Step 2: Fetch from Google Places API v1 (enrichment source with EV connector data)
         try {
-            GooglePlacesResponse googleResponse = googlePlacesService.searchNearby(
+            PlacesV1Response googleResponse = googlePlacesService.searchNearbyV1(
                 latitude,
                 longitude,
                 radius
             );
 
-            if (googleResponse.getResults() != null) {
-                log.info("Fetched {} places from Google Places", googleResponse.getResults().size());
+            if (googleResponse.getPlaces() != null) {
+                log.info("Fetched {} places from Google Places v1", googleResponse.getPlaces().size());
 
                 // Try to match Google Places with OpenChargeMap stations by proximity
-                for (GooglePlacesResponse.Place place : googleResponse.getResults()) {
-                    matchAndEnrichStation(allStations, place);
+                for (PlacesV1Response.Place place : googleResponse.getPlaces()) {
+                    matchAndEnrichStationV1(allStations, place);
                 }
             }
         } catch (Exception e) {
-            log.error("Error fetching from Google Places: {}", e.getMessage(), e);
+            log.error("Error fetching from Google Places v1: {}", e.getMessage(), e);
         }
 
         // Step 3: Limit results
@@ -155,6 +156,50 @@ public class StationsService {
     }
 
     /**
+     * Try to match a Google Place v1 with existing stations and enrich them with EV connector data
+     * If no match found, this could be a new station (future enhancement)
+     */
+    private void matchAndEnrichStationV1(List<Station> stations, PlacesV1Response.Place place) {
+        if (place.getLocation() == null) {
+            return;
+        }
+
+        BigDecimal placeLat = place.getLocation().getLatitude();
+        BigDecimal placeLon = place.getLocation().getLongitude();
+
+        // Find closest station within 100m
+        double minDistance = 0.1; // ~100 meters in degrees
+        Station closest = null;
+
+        for (Station station : stations) {
+            if (station.getLatitude() == null || station.getLongitude() == null) {
+                continue;
+            }
+
+            double distance = calculateDistance(
+                station.getLatitude().doubleValue(),
+                station.getLongitude().doubleValue(),
+                placeLat.doubleValue(),
+                placeLon.doubleValue()
+            );
+
+            if (distance < minDistance) {
+                minDistance = distance;
+                closest = station;
+            }
+        }
+
+        if (closest != null) {
+            // Enrich existing station with Google Places v1 data (includes EV connectors)
+            externalStationMapper.enrichWithGooglePlacesV1(closest, place);
+            String stationName = place.getDisplayName() != null ? place.getDisplayName().getText() : "Unknown";
+            log.debug("Enriched station {} with Google Places v1 data (including EV connectors)", stationName);
+        }
+        // Note: If no match found, we could create a new station from Google data
+        // This is a future enhancement
+    }
+
+    /**
      * Calculate simple distance between two coordinates
      * Returns distance in degrees (approximate)
      */
@@ -183,6 +228,19 @@ public class StationsService {
                     .collect(Collectors.toList());
             } catch (Exception e) {
                 log.warn("Error parsing photo references for station {}: {}", station.getName(), e.getMessage());
+            }
+        }
+
+        // Parse amenities from JSON
+        List<String> amenities = new ArrayList<>();
+        if (station.getAmenities() != null) {
+            try {
+                amenities = objectMapper.readValue(
+                    station.getAmenities(),
+                    new TypeReference<List<String>>() {}
+                );
+            } catch (Exception e) {
+                log.warn("Error parsing amenities for station {}: {}", station.getName(), e.getMessage());
             }
         }
 
@@ -226,6 +284,7 @@ public class StationsService {
             .openingHours(station.getOpeningHours())
             .isOpen24h(station.getIsOpen24h())
             .photoUrls(photoUrls)
+            .amenities(amenities)
             .lastVerifiedAt(station.getLastVerifiedAt())
             .isRecentlyVerified(station.getIsRecentlyVerified())
             .lastSyncAt(station.getLastSyncAt())
@@ -260,17 +319,42 @@ public class StationsService {
         // Convert to Station entity
         Station station = externalStationMapper.fromOpenChargeMap(ocmStation);
 
-        // Try to enrich with Google Places data if we have coordinates
-        if (station.getLatitude() != null && station.getLongitude() != null) {
+        // Check if we have a cached Google Place ID from previous lookups
+        Station cachedStation = stationRepository.findByOcmId(stationId).orElse(null);
+        String googlePlaceId = cachedStation != null ? cachedStation.getGooglePlaceId() : null;
+
+        // Try to enrich with Google Places data
+        boolean enriched = false;
+
+        // Strategy 1: If we have a Google Place ID, use Place Details API (most accurate)
+        if (googlePlaceId != null && !googlePlaceId.isEmpty()) {
+            try {
+                log.info("Using cached Google Place ID: {}", googlePlaceId);
+                GooglePlacesResponse.Place placeDetails = googlePlacesService.getPlaceDetailsAsPlace(googlePlaceId);
+                if (placeDetails != null) {
+                    externalStationMapper.enrichWithGooglePlaces(station, placeDetails);
+                    enriched = true;
+                    log.info("Enriched station with Google Place Details API");
+                }
+            } catch (Exception e) {
+                log.warn("Could not fetch Google Place Details for ID {}: {}", googlePlaceId, e.getMessage());
+            }
+        }
+
+        // Strategy 2: If not enriched yet and we have coordinates, try nearby search
+        if (!enriched && station.getLatitude() != null && station.getLongitude() != null) {
             try {
                 GooglePlacesResponse googleResponse = googlePlacesService.searchNearby(
                     station.getLatitude().doubleValue(),
                     station.getLongitude().doubleValue(),
-                    100 // 100 meters radius for detail lookup
+                    150 // 150 meters radius for detail lookup (increased from 100)
                 );
 
                 if (googleResponse.getResults() != null && !googleResponse.getResults().isEmpty()) {
                     // Find closest match
+                    double minDistance = Double.MAX_VALUE;
+                    GooglePlacesResponse.Place closestPlace = null;
+
                     for (GooglePlacesResponse.Place place : googleResponse.getResults()) {
                         if (place.getGeometry() != null && place.getGeometry().getLocation() != null) {
                             double distance = calculateDistance(
@@ -280,29 +364,158 @@ public class StationsService {
                                 place.getGeometry().getLocation().getLng().doubleValue()
                             );
 
-                            // If within 50 meters, consider it a match
-                            if (distance < 0.05) {
-                                externalStationMapper.enrichWithGooglePlaces(station, place);
-                                log.info("Enriched station with Google Places data");
-                                break;
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                closestPlace = place;
                             }
+                        }
+                    }
+
+                    // If within 100 meters, consider it a match
+                    if (closestPlace != null && minDistance < 0.1) {
+                        // Fetch full place details to get ratings and photos
+                        String placeId = closestPlace.getPlaceId();
+                        if (placeId != null) {
+                            try {
+                                GooglePlacesResponse.Place placeDetails = googlePlacesService.getPlaceDetailsAsPlace(placeId);
+                                if (placeDetails != null) {
+                                    externalStationMapper.enrichWithGooglePlaces(station, placeDetails);
+                                    enriched = true;
+                                    log.info("Enriched station with Google Place Details from nearby match (distance: {}m)", minDistance * 111000);
+
+                                    // If no photos available, try to find nearby business with photos
+                                    if (station.getPhotoReferences() == null || station.getPhotoReferences().equals("[]")) {
+                                        tryEnrichWithNearbyBusinessPhotos(station);
+                                    }
+                                } else {
+                                    // Fallback to nearby search result if details fetch fails
+                                    externalStationMapper.enrichWithGooglePlaces(station, closestPlace);
+                                    enriched = true;
+                                    log.info("Enriched station with Google Places nearby search result (distance: {}m)", minDistance * 111000);
+                                }
+                            } catch (Exception detailsError) {
+                                log.warn("Could not fetch Place Details for {}: {}. Using nearby search result.", placeId, detailsError.getMessage());
+                                externalStationMapper.enrichWithGooglePlaces(station, closestPlace);
+                                enriched = true;
+                            }
+                        } else {
+                            externalStationMapper.enrichWithGooglePlaces(station, closestPlace);
+                            enriched = true;
                         }
                     }
                 }
             } catch (Exception e) {
-                log.warn("Could not enrich station with Google Places data: {}", e.getMessage());
+                log.warn("Could not enrich station with Google Places nearby search: {}", e.getMessage());
             }
         }
 
-        log.info("Found station from APIs: {}", station.getName());
+        // Strategy 3: If still no photos and we have coordinates, add Street View as fallback
+        if (enriched && station.getLatitude() != null && station.getLongitude() != null) {
+            if (station.getPhotoReferences() == null || station.getPhotoReferences().equals("[]")) {
+                addStreetViewPhoto(station);
+            }
+        }
+
+        if (!enriched) {
+            log.warn("Station {} could not be enriched with Google Places data", station.getName());
+        }
+
+        log.info("Found station from APIs: {} (rating: {})", station.getName(), station.getCombinedRating());
 
         return mapToResponse(station);
+    }
+
+    /**
+     * Try to find nearby businesses (like dealerships) with photos when charging station has none
+     */
+    private void tryEnrichWithNearbyBusinessPhotos(Station station) {
+        try {
+            log.info("Searching for nearby businesses with photos for station: {}", station.getName());
+
+            // Search for any nearby place (not just charging stations) within 50 meters
+            GooglePlacesResponse nearbyResponse = googlePlacesService.searchNearbyBusiness(
+                station.getLatitude().doubleValue(),
+                station.getLongitude().doubleValue(),
+                50 // 50 meters - very close proximity
+            );
+
+            if (nearbyResponse.getResults() != null && !nearbyResponse.getResults().isEmpty()) {
+                // Find the closest place with photos
+                for (GooglePlacesResponse.Place place : nearbyResponse.getResults()) {
+                    if (place.getGeometry() != null && place.getGeometry().getLocation() != null) {
+                        double distance = calculateDistance(
+                            station.getLatitude().doubleValue(),
+                            station.getLongitude().doubleValue(),
+                            place.getGeometry().getLocation().getLat().doubleValue(),
+                            place.getGeometry().getLocation().getLng().doubleValue()
+                        );
+
+                        // Within 50 meters (0.05 degrees ≈ 5.5km, so 50m ≈ 0.0005)
+                        if (distance < 0.001) {
+                            // Fetch full details to get photos
+                            GooglePlacesResponse.Place placeDetails = googlePlacesService.getPlaceDetailsAsPlace(place.getPlaceId());
+                            if (placeDetails != null && placeDetails.getPhotos() != null && !placeDetails.getPhotos().isEmpty()) {
+                                try {
+                                    List<String> photoRefs = new ArrayList<>();
+                                    int maxPhotos = Math.min(placeDetails.getPhotos().size(), 5);
+                                    for (int i = 0; i < maxPhotos; i++) {
+                                        String photoRef = placeDetails.getPhotos().get(i).getPhotoReference();
+                                        if (photoRef != null) {
+                                            photoRefs.add(photoRef);
+                                        }
+                                    }
+                                    if (!photoRefs.isEmpty()) {
+                                        station.setPhotoReferences(objectMapper.writeValueAsString(photoRefs));
+                                        log.info("Added {} photos from nearby business '{}' (distance: {}m)",
+                                            photoRefs.size(), place.getName(), distance * 111000);
+                                        return; // Success - stop searching
+                                    }
+                                } catch (Exception e) {
+                                    log.warn("Error processing photos from nearby business: {}", e.getMessage());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            log.info("No nearby businesses with photos found for station: {}", station.getName());
+        } catch (Exception e) {
+            log.warn("Error searching for nearby business photos: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Add Street View photo as fallback when no other photos available
+     */
+    private void addStreetViewPhoto(Station station) {
+        try {
+            String streetViewUrl = String.format(
+                "https://maps.googleapis.com/maps/api/streetview?size=800x600&location=%s,%s&key=%s",
+                station.getLatitude(),
+                station.getLongitude(),
+                googlePlacesApiKey
+            );
+
+            // Store as a special marker that this is a Street View photo (not a photo reference)
+            List<String> photoUrls = new ArrayList<>();
+            photoUrls.add("streetview:" + streetViewUrl);
+            station.setPhotoReferences(objectMapper.writeValueAsString(photoUrls));
+            log.info("Added Street View photo for station: {}", station.getName());
+        } catch (Exception e) {
+            log.warn("Error adding Street View photo: {}", e.getMessage());
+        }
     }
 
     /**
      * Build complete Google Places Photo URL from photo reference
      */
     private String buildPhotoUrl(String photoReference) {
+        // Check if this is a Street View URL (starts with "streetview:")
+        if (photoReference.startsWith("streetview:")) {
+            return photoReference.substring(11); // Remove "streetview:" prefix
+        }
+
+        // Regular Google Places photo
         return String.format(
             "https://maps.googleapis.com/maps/api/place/photo?maxwidth=800&photo_reference=%s&key=%s",
             photoReference,
