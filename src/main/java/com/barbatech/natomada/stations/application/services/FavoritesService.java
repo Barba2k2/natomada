@@ -158,6 +158,7 @@ public class FavoritesService {
      */
     private StationResponseDto mapStationToResponse(Station station) {
         return StationResponseDto.builder()
+            .id(station.getId())
             .ocmId(station.getOcmId())
             .ocmUuid(station.getOcmUuid())
             .googlePlaceId(station.getGooglePlaceId())

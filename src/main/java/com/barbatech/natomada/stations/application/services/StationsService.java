@@ -245,6 +245,7 @@ public class StationsService {
         }
 
         return StationResponseDto.builder()
+            .id(station.getId())
             .ocmId(station.getOcmId())
             .ocmUuid(station.getOcmUuid())
             .googlePlaceId(station.getGooglePlaceId())
