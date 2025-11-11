@@ -15,8 +15,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Mapper to convert external API responses to Station entities
@@ -285,21 +287,42 @@ public class ExternalStationMapper {
                 }
             }
 
-            // Create a map of connector type to Google data for easier lookup
-            Map<String, PlacesV1Response.ConnectorAggregation> googleConnectorMap = new HashMap<>();
-            for (PlacesV1Response.ConnectorAggregation connector : evOptions.getConnectorAggregation()) {
+            // Keep Google connectors as list to preserve all power variants
+            List<PlacesV1Response.ConnectorAggregation> googleConnectors = evOptions.getConnectorAggregation();
+            Set<PlacesV1Response.ConnectorAggregation> usedGoogleConnectors = new HashSet<>();
+
+            for (PlacesV1Response.ConnectorAggregation connector : googleConnectors) {
                 String normalizedType = normalizeConnectorType(connector.getType());
-                googleConnectorMap.put(normalizedType, connector);
                 log.debug("Google connector: type={}, count={}, available={}, maxCharge={}kW",
                     normalizedType, connector.getCount(), connector.getAvailableCount(), connector.getMaxChargeRateKw());
             }
 
-            // Enrich existing connectors with Google data
+            // Enrich existing connectors with Google data, matching by type AND power
             for (Map<String, Object> connector : existingConnectors) {
                 String type = connector.get("type") != null ? connector.get("type").toString() : null;
                 if (type != null) {
                     String normalizedType = normalizeConnectorTypeFromOCM(type);
-                    PlacesV1Response.ConnectorAggregation googleData = googleConnectorMap.get(normalizedType);
+                    Double ocmPower = connector.get("powerKW") != null ?
+                        ((Number) connector.get("powerKW")).doubleValue() : null;
+
+                    // Find matching Google connector by type and similar power
+                    PlacesV1Response.ConnectorAggregation googleData = googleConnectors.stream()
+                        .filter(gc -> !usedGoogleConnectors.contains(gc))
+                        .filter(gc -> {
+                            String gcType = normalizeConnectorType(gc.getType());
+                            if (!normalizedType.equalsIgnoreCase(gcType)) {
+                                return false;
+                            }
+                            // If both have power info, match by similar power (within 2 kW tolerance)
+                            if (ocmPower != null && gc.getMaxChargeRateKw() != null) {
+                                double powerDiff = Math.abs(ocmPower - gc.getMaxChargeRateKw().doubleValue());
+                                return powerDiff <= 2.0;
+                            }
+                            // If no power info, don't match - let it be added separately
+                            return false;
+                        })
+                        .findFirst()
+                        .orElse(null);
 
                     if (googleData != null) {
                         // Enrich with Google data
@@ -309,23 +332,18 @@ public class ExternalStationMapper {
                             connector.put("maxChargeRateKw", googleData.getMaxChargeRateKw());
                         }
                         connector.put("availabilityLastUpdate", googleData.getAvailabilityLastUpdateTime());
-                        log.debug("Enriched OCM connector {} with Google Places v1 data", type);
+                        usedGoogleConnectors.add(googleData);
+                        log.debug("Enriched OCM connector {} ({}kW) with Google Places v1 data ({}kW)",
+                            type, ocmPower, googleData.getMaxChargeRateKw());
                     }
                 }
             }
 
-            // Add any Google connectors that weren't in OpenChargeMap
-            for (PlacesV1Response.ConnectorAggregation googleConnector : evOptions.getConnectorAggregation()) {
-                String normalizedType = normalizeConnectorType(googleConnector.getType());
+            // Add any Google connectors that weren't used for enrichment
+            for (PlacesV1Response.ConnectorAggregation googleConnector : googleConnectors) {
+                if (!usedGoogleConnectors.contains(googleConnector)) {
+                    String normalizedType = normalizeConnectorType(googleConnector.getType());
 
-                // Check if this connector already exists in OCM data
-                boolean exists = existingConnectors.stream()
-                    .anyMatch(c -> {
-                        String type = c.get("type") != null ? c.get("type").toString() : "";
-                        return normalizedType.equalsIgnoreCase(normalizeConnectorTypeFromOCM(type));
-                    });
-
-                if (!exists) {
                     // Add new connector from Google
                     Map<String, Object> newConnector = new HashMap<>();
                     newConnector.put("type", normalizedType);
@@ -339,7 +357,8 @@ public class ExternalStationMapper {
                     }
                     newConnector.put("availabilityLastUpdate", googleConnector.getAvailabilityLastUpdateTime());
                     existingConnectors.add(newConnector);
-                    log.info("Added new connector from Google Places v1: {}", normalizedType);
+                    log.info("Added new connector from Google Places v1: {} ({}kW)",
+                        normalizedType, googleConnector.getMaxChargeRateKw());
                 }
             }
 
