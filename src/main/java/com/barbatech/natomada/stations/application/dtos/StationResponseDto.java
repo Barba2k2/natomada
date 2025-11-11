@@ -41,6 +41,7 @@ public class StationResponseDto {
     private String openingHours; // JSON string
     private Boolean isOpen24h;
     private List<String> photoUrls; // List of complete photo URLs (Google Places)
+    private List<String> amenities; // List of amenities from Google Places
     private LocalDateTime lastVerifiedAt;
     private Boolean isRecentlyVerified;
     private LocalDateTime lastSyncAt;

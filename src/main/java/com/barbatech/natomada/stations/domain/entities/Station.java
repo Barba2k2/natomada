@@ -157,6 +157,11 @@ public class Station {
     @Column(name = "photo_references", columnDefinition = "jsonb")
     private String photoReferences;
 
+    // Amenities (JSON array of strings)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "amenities", columnDefinition = "jsonb")
+    private String amenities;
+
     // Metadata
     @Column(name = "last_verified_at")
     private LocalDateTime lastVerifiedAt;
