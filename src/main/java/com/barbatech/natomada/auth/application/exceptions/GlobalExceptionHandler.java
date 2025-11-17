@@ -1,5 +1,7 @@
 package com.barbatech.natomada.auth.application.exceptions;
 
+import com.barbatech.natomada.reviews.application.exceptions.ReviewExpiredException;
+import com.barbatech.natomada.reviews.application.exceptions.ReviewNotFoundException;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpStatus;
@@ -103,6 +105,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleAuthException(AuthException ex) {
         String message = getMessage("auth.unauthorized");
         return buildErrorResponse(HttpStatus.BAD_REQUEST, message);
+    }
+
+    @ExceptionHandler(ReviewExpiredException.class)
+    public ResponseEntity<ErrorResponse> handleReviewExpired(ReviewExpiredException ex) {
+        return buildErrorResponse(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
+    @ExceptionHandler(ReviewNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleReviewNotFound(ReviewNotFoundException ex) {
+        return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
     }
 
     private ResponseEntity<ErrorResponse> buildErrorResponse(HttpStatus status, String message) {
