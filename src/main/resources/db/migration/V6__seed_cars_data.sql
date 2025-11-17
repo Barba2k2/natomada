@@ -61,7 +61,7 @@ INSERT INTO cars (brand, model, battery_capacity, max_speed, fast_charging_power
 ('Renault', 'Kwid E-Tech', 26.80, 105, 30, 'Type 2', 'Hatchback', 'https://natomada-images.s3.us-east-1.amazonaws.com/cars/renault-kwid.jpg', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- Seed translations (pt_BR)
-INSERT INTO car_translations (car_id, locale, brand_translated, model_translated, body_type_translated, created_at, updated_at)
+INSERT INTO car_translations (car_id, locale, brand_translated, model_translated, body_type_translated)
 SELECT
     id,
     'pt_BR',
@@ -72,9 +72,7 @@ SELECT
         WHEN 'Hatchback' THEN 'Hatchback'
         WHEN 'SUV' THEN 'SUV'
         ELSE body_type
-    END,
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
+    END
 FROM cars;
 
 -- Add comments
