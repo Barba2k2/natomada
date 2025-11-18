@@ -133,6 +133,15 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-3600000}
 
+      # Flyway Configuration
+      SPRING_FLYWAY_ENABLED: ${SPRING_FLYWAY_ENABLED:-true}
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: ${SPRING_FLYWAY_BASELINE_ON_MIGRATE:-true}
+
+      # External APIs
+      OPENCM_API_KEY: ${OPENCM_API_KEY}
+      OPENCM_BASE_URL: ${OPENCM_BASE_URL:-https://api.openchargemap.io/v3}
+      GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY}
+
       # Application Configuration
       SERVER_PORT: 8080
       LOGGING_LEVEL_ROOT: INFO
