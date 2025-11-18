@@ -27,9 +27,11 @@ public class GetNearbyStationsRequestDto {
 
     @Min(value = 100, message = "Raio mínimo é 100 metros")
     @Max(value = 50000, message = "Raio máximo é 50km")
+    @Builder.Default
     private Integer radius = 5000;
 
     @Min(value = 1, message = "Limite mínimo é 1")
     @Max(value = 100, message = "Limite máximo é 100")
+    @Builder.Default
     private Integer limit = 20;
 }
