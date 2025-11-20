@@ -1,5 +1,7 @@
 package com.barbatech.natomada.stations.application.dtos;
 
+import com.barbatech.natomada.stations.domain.valueobjects.Connector;
+import com.barbatech.natomada.stations.domain.valueobjects.OpeningHours;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -33,13 +35,13 @@ public class StationResponseDto {
     private String phone;
     private Boolean isOperational;
     private Integer totalConnectors;
-    private String connectors; // JSON string
+    private List<Connector> connectors; // Type-safe connector list
     private OperatorDto operator;
     private UsageTypeDto usageType;
     private String usageCost;
     private RatingDto rating;
     private Integer totalReviews;
-    private String openingHours; // JSON string
+    private OpeningHours openingHours; // Type-safe opening hours
     private Boolean isOpen24h;
     private List<String> photoUrls; // List of complete photo URLs (Google Places)
     private List<String> amenities; // List of amenities from Google Places
