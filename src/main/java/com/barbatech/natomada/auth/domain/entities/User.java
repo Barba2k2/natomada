@@ -1,5 +1,6 @@
 package com.barbatech.natomada.auth.domain.entities;
 
+import com.barbatech.natomada.auth.application.exceptions.PasswordMismatchException;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -92,5 +93,68 @@ public class User {
      */
     public void verifyEmail() {
         this.emailVerifiedAt = LocalDateTime.now();
+    }
+
+    /**
+     * DOMAIN VALIDATION: Validate password match
+     *
+     * Business rule: Password and confirmation must match.
+     * This is domain logic, not application logic.
+     *
+     * Following Axel Engineering Doctrine:
+     * - Predictability: Clear validation, no hidden behavior
+     * - Domain Layer: Business rules belong in domain
+     * - Explicitness: Typed exceptions, no string matching
+     *
+     * @param password the password
+     * @param confirmation the password confirmation
+     * @throws PasswordMismatchException if passwords don't match
+     */
+    public static void validatePasswordMatch(String password, String confirmation) {
+        if (password == null || confirmation == null) {
+            throw new PasswordMismatchException();
+        }
+        if (!password.equals(confirmation)) {
+            throw new PasswordMismatchException();
+        }
+    }
+
+    /**
+     * DOMAIN LOGIC: Check if user can use charging stations
+     *
+     * Business rule: User must have verified email to use charging stations
+     *
+     * @return true if user can use charging stations
+     */
+    public boolean canUseChargingStations() {
+        return isEmailVerified();
+    }
+
+    /**
+     * DOMAIN LOGIC: Record charging session
+     *
+     * Business rule: Updates user's charging statistics
+     * - Increments total charges
+     * - Adds kWh to total charged
+     *
+     * @param kwhCharged amount of kWh charged in this session
+     * @throws IllegalArgumentException if kwhCharged is null or non-positive
+     */
+    public void recordChargingSession(BigDecimal kwhCharged) {
+        if (kwhCharged == null || kwhCharged.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("kWh must be positive");
+        }
+
+        this.totalCharges++;
+        this.totalKwhCharged = this.totalKwhCharged.add(kwhCharged);
+    }
+
+    /**
+     * DOMAIN LOGIC: Record station visit
+     *
+     * Business rule: Increments the count of stations visited by user
+     */
+    public void recordStationVisit() {
+        this.totalStationsVisited++;
     }
 }
