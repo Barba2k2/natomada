@@ -1,6 +1,8 @@
 package com.barbatech.natomada.stations.infrastructure.external;
 
 import com.barbatech.natomada.stations.domain.entities.Station;
+import com.barbatech.natomada.stations.domain.valueobjects.Connector;
+import com.barbatech.natomada.stations.domain.valueobjects.OpeningHours;
 import com.barbatech.natomada.stations.infrastructure.external.google.AmenityMapper;
 import com.barbatech.natomada.stations.infrastructure.external.google.dtos.GooglePlacesResponse;
 import com.barbatech.natomada.stations.infrastructure.external.google.dtos.PlacesV1Response;
@@ -12,12 +14,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /**
@@ -84,23 +86,18 @@ public class ExternalStationMapper {
             station.setIsOperational(ocm.getStatusType().getIsOperational());
         }
 
-        // Connectors
+        // Connectors - Type-safe (Axel Engineering Doctrine: explicit types over strings)
         if (ocm.getConnections() != null && !ocm.getConnections().isEmpty()) {
             // Calculate total by summing quantities
             int totalConnectors = ocm.getConnections().stream()
                 .mapToInt(conn -> conn.getQuantity() != null ? conn.getQuantity() : 1)
                 .sum();
             station.setTotalConnectors(totalConnectors);
-            try {
-                String connectorsJson = objectMapper.writeValueAsString(mapConnectors(ocm.getConnections()));
-                station.setConnectors(connectorsJson);
-            } catch (JsonProcessingException e) {
-                log.error("Error converting connectors to JSON", e);
-                station.setConnectors("[]");
-            }
+            // Direct assignment - no JSON serialization needed
+            station.setConnectors(mapConnectors(ocm.getConnections()));
         } else {
             station.setTotalConnectors(ocm.getNumberOfPoints() != null ? ocm.getNumberOfPoints() : 0);
-            station.setConnectors("[]");
+            station.setConnectors(new ArrayList<>());
         }
 
         // OCM Rating
@@ -134,13 +131,12 @@ public class ExternalStationMapper {
         // Calculate combined rating
         updateCombinedRating(station);
 
-        // Opening hours
+        // Opening hours - Type-safe (Axel Engineering Doctrine)
         if (place.getOpeningHours() != null && place.getOpeningHours().getWeekdayText() != null) {
-            try {
-                station.setOpeningHours(objectMapper.writeValueAsString(place.getOpeningHours().getWeekdayText()));
-            } catch (JsonProcessingException e) {
-                log.error("Error converting opening hours to JSON", e);
-            }
+            OpeningHours openingHours = OpeningHours.builder()
+                .weekdayText(place.getOpeningHours().getWeekdayText())
+                .build();
+            station.setOpeningHours(openingHours);
         }
 
         // Photo references
@@ -169,16 +165,12 @@ public class ExternalStationMapper {
             log.info("No photos available from Google Places for station {} (place_id: {})", station.getName(), place.getPlaceId());
         }
 
-        // Extract amenities from types
+        // Extract amenities from types - Type-safe (Axel Engineering Doctrine)
         if (place.getTypes() != null && !place.getTypes().isEmpty()) {
-            try {
-                List<String> amenities = amenityMapper.mapTypesToAmenities(place.getTypes());
-                if (!amenities.isEmpty()) {
-                    station.setAmenities(objectMapper.writeValueAsString(amenities));
-                    log.info("Extracted {} amenities for station {}: {}", amenities.size(), station.getName(), amenities);
-                }
-            } catch (JsonProcessingException e) {
-                log.error("Error converting amenities to JSON for station {}", station.getName(), e);
+            List<String> amenities = amenityMapper.mapTypesToAmenities(place.getTypes());
+            if (!amenities.isEmpty()) {
+                station.setAmenities(amenities);  // Direct assignment
+                log.info("Extracted {} amenities for station {}: {}", amenities.size(), station.getName(), amenities);
             }
         }
 
@@ -209,13 +201,12 @@ public class ExternalStationMapper {
         // Calculate combined rating
         updateCombinedRating(station);
 
-        // Opening hours
+        // Opening hours - Type-safe (Axel Engineering Doctrine)
         if (place.getCurrentOpeningHours() != null && place.getCurrentOpeningHours().getWeekdayDescriptions() != null) {
-            try {
-                station.setOpeningHours(objectMapper.writeValueAsString(place.getCurrentOpeningHours().getWeekdayDescriptions()));
-            } catch (JsonProcessingException e) {
-                log.error("Error converting opening hours to JSON", e);
-            }
+            OpeningHours openingHours = OpeningHours.builder()
+                .weekdayText(place.getCurrentOpeningHours().getWeekdayDescriptions())
+                .build();
+            station.setOpeningHours(openingHours);
         }
 
         // Photo references - Places API v1 uses different photo format
@@ -240,16 +231,12 @@ public class ExternalStationMapper {
             }
         }
 
-        // Extract amenities from types
+        // Extract amenities from types - Type-safe (Axel Engineering Doctrine)
         if (place.getTypes() != null && !place.getTypes().isEmpty()) {
-            try {
-                List<String> amenities = amenityMapper.mapTypesToAmenities(place.getTypes());
-                if (!amenities.isEmpty()) {
-                    station.setAmenities(objectMapper.writeValueAsString(amenities));
-                    log.info("Extracted {} amenities for station {}: {}", amenities.size(), station.getName(), amenities);
-                }
-            } catch (JsonProcessingException e) {
-                log.error("Error converting amenities to JSON for station {}", station.getName(), e);
+            List<String> amenities = amenityMapper.mapTypesToAmenities(place.getTypes());
+            if (!amenities.isEmpty()) {
+                station.setAmenities(amenities);  // Direct assignment
+                log.info("Extracted {} amenities for station {}: {}", amenities.size(), station.getName(), amenities);
             }
         }
 
@@ -263,6 +250,7 @@ public class ExternalStationMapper {
 
     /**
      * Merge EV connector data from Google Places v1 with existing OpenChargeMap connector data
+     * (Axel Engineering Doctrine: Immutable value objects, rebuild instead of mutate)
      */
     private void mergeEvConnectorData(Station station, PlacesV1Response.EVChargeOptions evOptions) {
         try {
@@ -274,20 +262,11 @@ public class ExternalStationMapper {
                 return;
             }
 
-            // Parse existing connectors from OpenChargeMap
-            List<Map<String, Object>> existingConnectors = new ArrayList<>();
-            if (station.getConnectors() != null && !station.getConnectors().isEmpty() && !station.getConnectors().equals("[]")) {
-                try {
-                    existingConnectors = objectMapper.readValue(
-                        station.getConnectors(),
-                        objectMapper.getTypeFactory().constructCollectionType(List.class, Map.class)
-                    );
-                } catch (JsonProcessingException e) {
-                    log.warn("Could not parse existing connectors for station {}: {}", station.getName(), e.getMessage());
-                }
-            }
+            // Get existing connectors from OpenChargeMap (Type-safe - Axel Engineering Doctrine)
+            List<Connector> existingConnectors = station.getConnectors() != null ?
+                new ArrayList<>(station.getConnectors()) : new ArrayList<>();
 
-            // Keep Google connectors as list to preserve all power variants
+            // Google connectors
             List<PlacesV1Response.ConnectorAggregation> googleConnectors = evOptions.getConnectorAggregation();
             Set<PlacesV1Response.ConnectorAggregation> usedGoogleConnectors = new HashSet<>();
 
@@ -297,13 +276,16 @@ public class ExternalStationMapper {
                     normalizedType, connector.getCount(), connector.getAvailableCount(), connector.getMaxChargeRateKw());
             }
 
-            // Enrich existing connectors with Google data, matching by type AND power
-            for (Map<String, Object> connector : existingConnectors) {
-                String type = connector.get("type") != null ? connector.get("type").toString() : null;
+            // Rebuild connectors list with enriched data (immutability principle)
+            List<Connector> mergedConnectors = new ArrayList<>();
+
+            // Enrich existing OCM connectors with Google data, matching by type AND power
+            for (Connector ocmConnector : existingConnectors) {
+                String type = ocmConnector.getType();
                 if (type != null) {
                     String normalizedType = normalizeConnectorTypeFromOCM(type);
-                    Double ocmPower = connector.get("powerKW") != null ?
-                        ((Number) connector.get("powerKW")).doubleValue() : null;
+                    Double ocmPower = ocmConnector.getPower() != null ?
+                        ocmConnector.getPower().doubleValue() : null;
 
                     // Find matching Google connector by type and similar power
                     PlacesV1Response.ConnectorAggregation googleData = googleConnectors.stream()
@@ -325,17 +307,31 @@ public class ExternalStationMapper {
                         .orElse(null);
 
                     if (googleData != null) {
-                        // Enrich with Google data
-                        connector.put("availableCount", googleData.getAvailableCount());
-                        connector.put("outOfServiceCount", googleData.getOutOfServiceCount());
-                        if (googleData.getMaxChargeRateKw() != null) {
-                            connector.put("maxChargeRateKw", googleData.getMaxChargeRateKw());
-                        }
-                        connector.put("availabilityLastUpdate", googleData.getAvailabilityLastUpdateTime());
+                        // Rebuild connector with Google enrichment data (immutability)
+                        Connector enriched = Connector.builder()
+                            .id(ocmConnector.getId())
+                            .type(ocmConnector.getType())
+                            .power(googleData.getMaxChargeRateKw() != null ?
+                                googleData.getMaxChargeRateKw() : ocmConnector.getPower())
+                            .voltage(ocmConnector.getVoltage())
+                            .amps(ocmConnector.getAmps())
+                            .current(ocmConnector.getCurrent())
+                            .quantity(googleData.getCount() != null ? googleData.getCount() : ocmConnector.getQuantity())
+                            .status(ocmConnector.getStatus())
+                            .isOperational(ocmConnector.getIsOperational())
+                            .build();
+
+                        mergedConnectors.add(enriched);
                         usedGoogleConnectors.add(googleData);
                         log.debug("Enriched OCM connector {} ({}kW) with Google Places v1 data ({}kW)",
                             type, ocmPower, googleData.getMaxChargeRateKw());
+                    } else {
+                        // No match, keep original
+                        mergedConnectors.add(ocmConnector);
                     }
+                } else {
+                    // No type, keep original
+                    mergedConnectors.add(ocmConnector);
                 }
             }
 
@@ -344,47 +340,32 @@ public class ExternalStationMapper {
                 if (!usedGoogleConnectors.contains(googleConnector)) {
                     String normalizedType = normalizeConnectorType(googleConnector.getType());
 
-                    // Add new connector from Google
-                    Map<String, Object> newConnector = new HashMap<>();
-                    newConnector.put("type", normalizedType);
-                    newConnector.put("source", "google_places_v1");
-                    newConnector.put("quantity", googleConnector.getCount());
-                    newConnector.put("availableCount", googleConnector.getAvailableCount());
-                    newConnector.put("outOfServiceCount", googleConnector.getOutOfServiceCount());
-                    if (googleConnector.getMaxChargeRateKw() != null) {
-                        newConnector.put("maxChargeRateKw", googleConnector.getMaxChargeRateKw());
-                        newConnector.put("powerKW", googleConnector.getMaxChargeRateKw().doubleValue());
-                    }
-                    newConnector.put("availabilityLastUpdate", googleConnector.getAvailabilityLastUpdateTime());
-                    existingConnectors.add(newConnector);
+                    // Create new connector from Google data
+                    Connector newConnector = Connector.builder()
+                        .type(normalizedType)
+                        .power(googleConnector.getMaxChargeRateKw())
+                        .quantity(googleConnector.getCount())
+                        .isOperational(true) // Assume operational if in Google data
+                        .build();
+
+                    mergedConnectors.add(newConnector);
                     log.info("Added new connector from Google Places v1: {} ({}kW)",
                         normalizedType, googleConnector.getMaxChargeRateKw());
                 }
             }
 
-            // Update station with merged connector data
-            if (!existingConnectors.isEmpty()) {
-                station.setConnectors(objectMapper.writeValueAsString(existingConnectors));
+            // Update station with merged connector data (direct assignment, no JSON)
+            if (!mergedConnectors.isEmpty()) {
+                station.setConnectors(mergedConnectors);
 
                 // Update total connector count
-                int totalCount = existingConnectors.stream()
-                    .mapToInt(c -> {
-                        Object qty = c.get("quantity");
-                        if (qty instanceof Integer) return (Integer) qty;
-                        if (qty instanceof String) {
-                            try {
-                                return Integer.parseInt((String) qty);
-                            } catch (NumberFormatException e) {
-                                return 1;
-                            }
-                        }
-                        return 1;
-                    })
+                int totalCount = mergedConnectors.stream()
+                    .mapToInt(c -> c.getQuantity() != null ? c.getQuantity() : 1)
                     .sum();
                 station.setTotalConnectors(totalCount);
 
                 log.info("Successfully merged {} connectors for station {} (total: {})",
-                    existingConnectors.size(), station.getName(), totalCount);
+                    mergedConnectors.size(), station.getName(), totalCount);
             }
         } catch (Exception e) {
             log.error("Error merging EV connector data for station {}: {}", station.getName(), e.getMessage(), e);
@@ -457,36 +438,34 @@ public class ExternalStationMapper {
     }
 
     /**
-     * Map OpenChargeMap connections to our connector format
+     * Map OpenChargeMap connections to Connector value objects (Axel Engineering Doctrine: type-safe)
      */
-    private List<Map<String, Object>> mapConnectors(List<OpenChargeMapResponse.Connection> connections) {
-        List<Map<String, Object>> connectors = new ArrayList<>();
+    private List<Connector> mapConnectors(List<OpenChargeMapResponse.Connection> connections) {
+        List<Connector> connectors = new ArrayList<>();
 
         for (OpenChargeMapResponse.Connection conn : connections) {
-            Map<String, Object> connector = new HashMap<>();
+            Connector.ConnectorBuilder builder = Connector.builder();
 
             if (conn.getConnectionType() != null) {
-                connector.put("type", conn.getConnectionType().getTitle());
-                connector.put("formalName", conn.getConnectionType().getFormalName());
-            }
-
-            if (conn.getLevel() != null) {
-                connector.put("level", conn.getLevel().getTitle());
+                builder.type(conn.getConnectionType().getTitle());
             }
 
             if (conn.getCurrentType() != null) {
-                connector.put("currentType", conn.getCurrentType().getTitle());
+                builder.current(conn.getCurrentType().getTitle());
             }
 
-            connector.put("powerKW", conn.getPowerKW());
-            connector.put("quantity", conn.getQuantity() != null ? conn.getQuantity() : 1);
+            if (conn.getPowerKW() != null) {
+                builder.power(conn.getPowerKW());
+            }
+
+            builder.quantity(conn.getQuantity() != null ? conn.getQuantity() : 1);
 
             if (conn.getStatusType() != null) {
-                connector.put("status", conn.getStatusType().getTitle());
-                connector.put("isOperational", conn.getStatusType().getIsOperational());
+                builder.status(conn.getStatusType().getTitle());
+                builder.isOperational(conn.getStatusType().getIsOperational());
             }
 
-            connectors.add(connector);
+            connectors.add(builder.build());
         }
 
         return connectors;
@@ -517,7 +496,7 @@ public class ExternalStationMapper {
                 BigDecimal weighted = ocmRating
                     .multiply(BigDecimal.valueOf(ocmCount))
                     .add(googleRating.multiply(BigDecimal.valueOf(googleCount)))
-                    .divide(BigDecimal.valueOf(totalCount), 2, BigDecimal.ROUND_HALF_UP);
+                    .divide(BigDecimal.valueOf(totalCount), 2, RoundingMode.HALF_UP);
                 station.setCombinedRating(weighted);
             }
         } else if (googleRating != null) {
