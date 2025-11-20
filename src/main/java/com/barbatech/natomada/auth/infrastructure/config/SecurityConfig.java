@@ -72,8 +72,15 @@ public class SecurityConfig {
         // Allow frontend URL from environment
         String frontendUrl = System.getenv("FRONTEND_URL");
         if (frontendUrl != null && !frontendUrl.isEmpty()) {
-            configuration.setAllowedOrigins(List.of(frontendUrl));
+            if ("*".equals(frontendUrl)) {
+                // Allow all origins for production
+                configuration.setAllowedOriginPatterns(List.of("*"));
+            } else {
+                // Allow specific frontend URL
+                configuration.setAllowedOrigins(List.of(frontendUrl));
+            }
         } else {
+            // Default to localhost for development
             configuration.setAllowedOrigins(List.of("http://localhost:3000"));
         }
 

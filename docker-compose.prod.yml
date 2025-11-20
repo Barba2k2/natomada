@@ -142,6 +142,9 @@ services:
       OPENCM_BASE_URL: ${OPENCM_BASE_URL:-https://api.openchargemap.io/v3}
       GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY}
 
+      # CORS Configuration
+      FRONTEND_URL: ${FRONTEND_URL:-*}
+
       # Application Configuration
       SERVER_PORT: 8080
       LOGGING_LEVEL_ROOT: INFO
