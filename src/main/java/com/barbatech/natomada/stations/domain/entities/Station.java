@@ -1,5 +1,7 @@
 package com.barbatech.natomada.stations.domain.entities;
 
+import com.barbatech.natomada.stations.domain.valueobjects.Connector;
+import com.barbatech.natomada.stations.domain.valueobjects.OpeningHours;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -12,6 +14,8 @@ import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Domain Entity: Station (Charging Station)
@@ -81,10 +85,11 @@ public class Station {
     @Column(name = "total_connectors", nullable = false)
     private Integer totalConnectors = 0;
 
-    // Connectors (JSON)
+    // Connectors (JSON) - Type-safe value objects
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
-    private String connectors;
+    @Builder.Default
+    private List<Connector> connectors = new ArrayList<>();
 
     // Operator Information
     @Column(name = "operator_name", length = 255)
@@ -143,10 +148,10 @@ public class Station {
     @Column(name = "total_reviews", nullable = false)
     private Integer totalReviews = 0;
 
-    // Opening Hours (JSON)
+    // Opening Hours (JSON) - Type-safe value object
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "opening_hours", columnDefinition = "jsonb")
-    private String openingHours;
+    private OpeningHours openingHours;
 
     @Builder.Default
     @Column(name = "is_open_24h", nullable = false)
@@ -157,10 +162,11 @@ public class Station {
     @Column(name = "photo_references", columnDefinition = "jsonb")
     private String photoReferences;
 
-    // Amenities (JSON array of strings)
+    // Amenities (JSON array of strings) - Type-safe list
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "amenities", columnDefinition = "jsonb")
-    private String amenities;
+    @Builder.Default
+    private List<String> amenities = new ArrayList<>();
 
     // Metadata
     @Column(name = "last_verified_at")
@@ -180,4 +186,82 @@ public class Station {
     @UpdateTimestamp
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * Domain logic: Get total available connectors
+     *
+     * Business rule: Sum quantities of all available connectors
+     *
+     * @return count of available connectors
+     */
+    public int getAvailableConnectorsCount() {
+        if (connectors == null) {
+            return 0;
+        }
+        return connectors.stream()
+            .filter(Connector::isAvailable)
+            .mapToInt(c -> c.getQuantity() != null ? c.getQuantity() : 1)
+            .sum();
+    }
+
+    /**
+     * Domain logic: Check if station has fast charging
+     *
+     * Business rule: Station has fast charging if any connector is fast charging capable
+     *
+     * @return true if station has at least one fast charging connector
+     */
+    public boolean hasFastCharging() {
+        if (connectors == null) {
+            return false;
+        }
+        return connectors.stream()
+            .anyMatch(Connector::isFastCharging);
+    }
+
+    /**
+     * Domain logic: Check if station has ultra-fast charging
+     *
+     * Business rule: Station has ultra-fast charging if any connector is ultra-fast capable
+     *
+     * @return true if station has at least one ultra-fast charging connector
+     */
+    public boolean hasUltraFastCharging() {
+        if (connectors == null) {
+            return false;
+        }
+        return connectors.stream()
+            .anyMatch(Connector::isUltraFastCharging);
+    }
+
+    /**
+     * Domain logic: Check if station is currently open
+     *
+     * Business rule: Station is open if:
+     * - It's marked as 24/7, OR
+     * - Current time falls within opening hours
+     *
+     * @return true if station is currently open
+     */
+    public boolean isCurrentlyOpen() {
+        if (Boolean.TRUE.equals(isOpen24h)) {
+            return true;
+        }
+        return openingHours != null && openingHours.isOpenNow();
+    }
+
+    /**
+     * Domain logic: Check if station is recently verified
+     *
+     * Business rule: Station is recently verified if:
+     * - lastVerifiedAt is within 30 days
+     *
+     * @return true if station was verified within last 30 days
+     */
+    public boolean hasRecentVerification() {
+        if (lastVerifiedAt == null) {
+            return false;
+        }
+        return lastVerifiedAt.isAfter(LocalDateTime.now().minusDays(30));
+    }
 }
