@@ -231,18 +231,8 @@ public class StationsService {
             }
         }
 
-        // Parse amenities from JSON
-        List<String> amenities = new ArrayList<>();
-        if (station.getAmenities() != null) {
-            try {
-                amenities = objectMapper.readValue(
-                    station.getAmenities(),
-                    new TypeReference<List<String>>() {}
-                );
-            } catch (Exception e) {
-                log.warn("Error parsing amenities for station {}: {}", station.getName(), e.getMessage());
-            }
-        }
+        // Amenities are now type-safe - no JSON parsing needed
+        // Following Axel Engineering Doctrine: explicit types over strings
 
         return StationResponseDto.builder()
             .id(station.getId())
@@ -260,7 +250,7 @@ public class StationsService {
             .phone(station.getPhone())
             .isOperational(station.getIsOperational())
             .totalConnectors(station.getTotalConnectors())
-            .connectors(station.getConnectors())
+            .connectors(station.getConnectors())  // Type-safe connectors
             .operator(StationResponseDto.OperatorDto.builder()
                 .name(station.getOperatorName())
                 .website(station.getOperatorWebsite())
@@ -282,10 +272,10 @@ public class StationsService {
                 .combined(station.getCombinedRating())
                 .build())
             .totalReviews(station.getTotalReviews())
-            .openingHours(station.getOpeningHours())
+            .openingHours(station.getOpeningHours())  // Type-safe opening hours
             .isOpen24h(station.getIsOpen24h())
             .photoUrls(photoUrls)
-            .amenities(amenities)
+            .amenities(station.getAmenities())  // Type-safe amenities
             .lastVerifiedAt(station.getLastVerifiedAt())
             .isRecentlyVerified(station.getIsRecentlyVerified())
             .lastSyncAt(station.getLastSyncAt())
