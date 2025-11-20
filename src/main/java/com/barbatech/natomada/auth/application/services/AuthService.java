@@ -52,17 +52,19 @@ public class AuthService {
 
     /**
      * Register a new user
+     *
+     * Following Axel Engineering Doctrine:
+     * - Application layer: Orchestration and infrastructure concerns
+     * - Domain layer: Business validation (password match)
      */
     @Transactional
     public MessageResponseDto register(RegisterRequestDto dto) {
         log.info("Registering new user with email: {}", dto.getEmail());
 
-        // Validate password confirmation
-        if (!dto.getPassword().equals(dto.getPasswordConfirmation())) {
-            throw new PasswordMismatchException();
-        }
+        // DOMAIN VALIDATION: Password match (moved to domain layer)
+        User.validatePasswordMatch(dto.getPassword(), dto.getPasswordConfirmation());
 
-        // Check if email already exists
+        // APPLICATION LAYER: Infrastructure constraints (uniqueness checks)
         if (userRepository.existsByEmail(dto.getEmail())) {
             throw new EmailAlreadyExistsException();
         }
@@ -273,17 +275,19 @@ public class AuthService {
 
     /**
      * Reset password using token
+     *
+     * Following Axel Engineering Doctrine:
+     * - Application layer: Token validation, orchestration
+     * - Domain layer: Business validation (password match)
      */
     @Transactional
     public MessageResponseDto resetPassword(ResetPasswordRequestDto dto) {
         log.info("Resetting password with token");
 
-        // Validate password confirmation
-        if (!dto.getNewPassword().equals(dto.getNewPasswordConfirmation())) {
-            throw new PasswordMismatchException();
-        }
+        // DOMAIN VALIDATION: Password match (moved to domain layer)
+        User.validatePasswordMatch(dto.getNewPassword(), dto.getNewPasswordConfirmation());
 
-        // Find and validate token
+        // APPLICATION LAYER: Token validation
         PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(dto.getToken())
             .orElseThrow(() -> new InvalidTokenException("Token inválido"));
 
