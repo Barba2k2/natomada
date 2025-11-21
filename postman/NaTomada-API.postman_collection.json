@@ -67,7 +67,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"Password123!\",\n  \"name\": \"João Silva\",\n  \"phone\": \"+5511999999999\"\n}"
+							"raw": "{\n  \"name\": \"João Silva\",\n  \"email\": \"user@example.com\",\n  \"phone\": \"+5511999999999\",\n  \"password\": \"Password123!\",\n  \"passwordConfirmation\": \"Password123!\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/auth/register",
@@ -80,7 +80,7 @@
 								"register"
 							]
 						},
-						"description": "Registra um novo usuário no sistema"
+						"description": "Registra um novo usuário no sistema. Phone deve estar no formato E.164 COM DDI. Exemplos: +5511999999999 (Brasil), +1234567890 (EUA)"
 					},
 					"response": []
 				},
@@ -93,8 +93,8 @@
 								"exec": [
 									"if (pm.response.code === 200) {",
 									"    var jsonData = pm.response.json();",
-									"    pm.environment.set('accessToken', jsonData.accessToken);",
-									"    pm.environment.set('refreshToken', jsonData.refreshToken);",
+									"    pm.environment.set('accessToken', jsonData.access_token);",
+									"    pm.environment.set('refreshToken', jsonData.refresh_token);",
 									"    console.log('Tokens saved to environment');",
 									"}"
 								],
@@ -141,8 +141,8 @@
 								"exec": [
 									"if (pm.response.code === 200) {",
 									"    var jsonData = pm.response.json();",
-									"    pm.environment.set('accessToken', jsonData.accessToken);",
-									"    pm.environment.set('refreshToken', jsonData.refreshToken);",
+									"    pm.environment.set('accessToken', jsonData.access_token);",
+									"    pm.environment.set('refreshToken', jsonData.refresh_token);",
 									"    console.log('Tokens refreshed');",
 									"}"
 								],
@@ -234,6 +234,267 @@
 						"description": "Invalida o refresh token do usuário autenticado"
 					},
 					"response": []
+				},
+				{
+					"name": "Forgot Password",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/forgot-password",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"forgot-password"
+							]
+						},
+						"description": "Envia um email com link para redefinir a senha"
+					},
+					"response": []
+				},
+				{
+					"name": "Validate Reset Token",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"reset-token-here\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/validate-reset-token",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"validate-reset-token"
+							]
+						},
+						"description": "Verifica se o token de redefinição de senha é válido"
+					},
+					"response": []
+				},
+				{
+					"name": "Reset Password",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"token\": \"reset-token-here\",\n  \"newPassword\": \"NewPassword123!\",\n  \"newPasswordConfirmation\": \"NewPassword123!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/reset-password",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"reset-password"
+							]
+						},
+						"description": "Redefine a senha do usuário usando o token recebido por email"
+					},
+					"response": []
+				},
+				{
+					"name": "Send OTP (SMS)",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"deliveryMethod\": \"SMS\",\n  \"phoneNumber\": \"+5511999999999\"\n}",
+							"options": {
+								"raw": {
+									"description": "DDI (código do país) é necessário no formato E.164. Exemplos: +5511999999999 (Brasil), +1234567890 (EUA)"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/send-otp",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"send-otp"
+							]
+						},
+						"description": "Envia um código OTP de 6 dígitos via SMS. IMPORTANTE: phoneNumber deve estar no formato E.164 COM DDI. Exemplos: +5511999999999 (Brasil), +1234567890 (EUA)"
+					},
+					"response": []
+				},
+				{
+					"name": "Send OTP (Email)",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"deliveryMethod\": \"EMAIL\",\n  \"email\": \"user@example.com\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/send-otp",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"send-otp"
+							]
+						},
+						"description": "Envia um código OTP de 6 dígitos via Email. IMPORTANTE: email deve ser válido no formato padrão (user@example.com)"
+					},
+					"response": []
+				},
+				{
+					"name": "Verify OTP (SMS)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set('accessToken', jsonData.access_token);",
+									"    pm.environment.set('refreshToken', jsonData.refresh_token);",
+									"    console.log('OTP verified, tokens saved');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"deliveryMethod\": \"SMS\",\n  \"phoneNumber\": \"+5511999999999\",\n  \"code\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/verify-otp",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"verify-otp"
+							]
+						},
+						"description": "Verifica o código OTP enviado via SMS e autentica o usuário se estiver cadastrado. IMPORTANTE: phoneNumber deve estar no formato E.164 COM DDI. Exemplo: +5511999999999"
+					},
+					"response": []
+				},
+				{
+					"name": "Verify OTP (Email)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    var jsonData = pm.response.json();",
+									"    pm.environment.set('accessToken', jsonData.access_token);",
+									"    pm.environment.set('refreshToken', jsonData.refresh_token);",
+									"    console.log('OTP verified, tokens saved');",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"deliveryMethod\": \"EMAIL\",\n  \"email\": \"user@example.com\",\n  \"code\": \"123456\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/auth/verify-otp",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"verify-otp"
+							]
+						},
+						"description": "Verifica o código OTP enviado via Email e autentica o usuário se estiver cadastrado. IMPORTANTE: email deve ser válido no formato padrão (user@example.com)"
+					},
+					"response": []
 				}
 			],
 			"description": "Endpoints para autenticação e gerenciamento de usuários"
@@ -272,7 +533,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"name\": \"João Silva Santos\",\n  \"phone\": \"+5511988888888\"\n}"
+							"raw": "{\n  \"name\": \"João Silva Santos\",\n  \"phone\": \"+5511988888888\",\n  \"bio\": \"Entusiasta de veículos elétricos\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/profile",
@@ -284,7 +545,7 @@
 								"profile"
 							]
 						},
-						"description": "Atualiza os dados do perfil do usuário"
+						"description": "Atualiza os dados do perfil do usuário. Phone (se fornecido) deve estar no formato E.164 COM DDI. Exemplo: +5511988888888"
 					},
 					"response": []
 				},
@@ -300,7 +561,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"currentPassword\": \"Password123!\",\n  \"newPassword\": \"NewPassword123!\"\n}"
+							"raw": "{\n  \"currentPassword\": \"Password123!\",\n  \"newPassword\": \"NewPassword123!\",\n  \"newPasswordConfirmation\": \"NewPassword123!\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/profile/password",
@@ -420,6 +681,36 @@
 		{
 			"name": "Stations",
 			"item": [
+				{
+					"name": "Get Station by ID",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/stations/:stationId",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"stations",
+								":stationId"
+							],
+							"variable": [
+								{
+									"key": "stationId",
+									"value": "ocm_217270",
+									"description": "ID da estação (pode ser ocm_123 ou external ID)"
+								}
+							]
+						},
+						"description": "Retorna detalhes completos de uma estação específica, incluindo fotos e avaliações do Google Places"
+					},
+					"response": []
+				},
 				{
 					"name": "Get Nearby Stations",
 					"request": {
@@ -583,6 +874,115 @@
 				}
 			],
 			"description": "Endpoints para gerenciamento de estações favoritas do usuário"
+		},
+		{
+			"name": "Search History",
+			"item": [
+				{
+					"name": "Save Search to History",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"latitude\": -23.5629,\n  \"longitude\": -46.6544,\n  \"address\": \"São Paulo, SP\",\n  \"radius\": 5000\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/stations/search-history",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"stations",
+								"search-history"
+							]
+						},
+						"description": "Salva uma busca no histórico do usuário autenticado"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Recent Searches",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/stations/search-history?limit=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"stations",
+								"search-history"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10",
+									"description": "Limite de resultados (padrão: 10)"
+								}
+							]
+						},
+						"description": "Retorna o histórico recente de buscas do usuário autenticado"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Search from History",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/stations/search-history/:searchId",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"stations",
+								"search-history",
+								":searchId"
+							],
+							"variable": [
+								{
+									"key": "searchId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Remove uma busca específica do histórico do usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Clear All Search History",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/stations/search-history",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"stations",
+								"search-history"
+							]
+						},
+						"description": "Remove todas as buscas do histórico do usuário autenticado"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para gerenciamento de histórico de buscas de estações"
 		},
 		{
 			"name": "Cars Catalog",
@@ -821,6 +1221,52 @@
 					"response": []
 				},
 				{
+					"name": "Get Primary Vehicle",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/user-vehicles/primary",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"user-vehicles",
+								"primary"
+							]
+						},
+						"description": "Retorna o veículo principal do usuário"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Vehicle by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/user-vehicles/:vehicleId",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"user-vehicles",
+								":vehicleId"
+							],
+							"variable": [
+								{
+									"key": "vehicleId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Retorna os detalhes de um veículo específico do usuário"
+					},
+					"response": []
+				},
+				{
 					"name": "Add User Vehicle",
 					"request": {
 						"method": "POST",
@@ -832,7 +1278,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"carId\": 1,\n  \"nickname\": \"Meu Tesla\",\n  \"isPrimary\": true\n}"
+							"raw": "{\n  \"carId\": 1,\n  \"nickname\": \"Meu Tesla\",\n  \"licensePlate\": \"ABC1234\",\n  \"color\": \"Branco\",\n  \"isPrimary\": true\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/user-vehicles",
@@ -860,7 +1306,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"nickname\": \"Tesla Model 3 Branco\"\n}"
+							"raw": "{\n  \"nickname\": \"Tesla Model 3 Branco\",\n  \"color\": \"Branco Pérola\"\n}"
 						},
 						"url": {
 							"raw": "{{baseUrl}}/api/user-vehicles/:vehicleId",
@@ -938,6 +1384,169 @@
 				}
 			],
 			"description": "Endpoints para gerenciamento de veículos do usuário"
+		},
+		{
+			"name": "Reviews",
+			"item": [
+				{
+					"name": "Submit Review",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"rating\": 5,\n  \"comment\": \"Excelente estação, carregadores funcionando perfeitamente!\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/reviews/station/:stationId",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"reviews",
+								"station",
+								":stationId"
+							],
+							"variable": [
+								{
+									"key": "stationId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Cria uma nova avaliação para uma estação"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Station Reviews",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/reviews/station/:stationId?limit=20&offset=0",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"reviews",
+								"station",
+								":stationId"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20",
+									"description": "Limite de resultados"
+								},
+								{
+									"key": "offset",
+									"value": "0",
+									"description": "Offset para paginação"
+								}
+							],
+							"variable": [
+								{
+									"key": "stationId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Retorna todas as avaliações de uma estação"
+					},
+					"response": []
+				},
+				{
+					"name": "Get My Reviews",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/reviews/user/me",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"reviews",
+								"user",
+								"me"
+							]
+						},
+						"description": "Retorna todas as avaliações do usuário autenticado"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Review",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"rating\": 4,\n  \"comment\": \"Estação boa, mas poderia ter mais conectores disponíveis\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/reviews/:reviewId",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"reviews",
+								":reviewId"
+							],
+							"variable": [
+								{
+									"key": "reviewId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Atualiza uma avaliação existente"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Review",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/reviews/:reviewId",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"reviews",
+								":reviewId"
+							],
+							"variable": [
+								{
+									"key": "reviewId",
+									"value": "1"
+								}
+							]
+						},
+						"description": "Remove uma avaliação existente"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints para gerenciamento de avaliações de estações"
 		}
 	],
 	"variable": [
