@@ -27,7 +27,7 @@ public class RegisterRequestDto {
     private String email;
 
     @NotBlank(message = "Telefone é obrigatório")
-    @Pattern(regexp = "^\\d{10,11}$", message = "Telefone deve conter 10 ou 11 dígitos")
+    @Pattern(regexp = "^\\+?[1-9]\\d{1,14}$", message = "Telefone inválido. Use formato internacional com DDI (ex: +5511999999999)")
     private String phone;
 
     @NotBlank(message = "Senha é obrigatória")

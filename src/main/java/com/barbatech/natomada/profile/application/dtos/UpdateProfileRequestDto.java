@@ -1,5 +1,6 @@
 package com.barbatech.natomada.profile.application.dtos;
 
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,6 +19,7 @@ public class UpdateProfileRequestDto {
     @Size(min = 3, max = 100, message = "Nome deve ter entre 3 e 100 caracteres")
     private String name;
 
+    @Pattern(regexp = "^\\+?[1-9]\\d{1,14}$", message = "Telefone inválido. Use formato internacional com DDI (ex: +5511999999999)")
     private String phone;
 
     @Size(max = 500, message = "Bio deve ter no máximo 500 caracteres")
