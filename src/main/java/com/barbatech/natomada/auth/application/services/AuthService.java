@@ -213,15 +213,26 @@ public class AuthService {
     }
 
     /**
-     * Request password reset - sends email with reset token
+     * Request password reset - sends email or SMS with reset token
      */
     @Transactional
     public MessageResponseDto forgotPassword(ForgotPasswordRequestDto dto) {
-        log.info("Password reset requested for email: {}", dto.getEmail());
+        // Determine delivery method
+        OtpDeliveryMethod deliveryMethod = dto.getDeliveryMethod() != null
+            ? OtpDeliveryMethod.valueOf(dto.getDeliveryMethod().toUpperCase())
+            : OtpDeliveryMethod.EMAIL;
 
-        // Find user by email
-        User user = userRepository.findByEmail(dto.getEmail())
-            .orElseThrow(UserNotFoundException::new);
+        // Find user by email or phone
+        User user;
+        if (deliveryMethod == OtpDeliveryMethod.SMS) {
+            log.info("Password reset requested for phone: {}", dto.getPhoneNumber());
+            user = userRepository.findByPhone(dto.getPhoneNumber())
+                .orElseThrow(UserNotFoundException::new);
+        } else {
+            log.info("Password reset requested for email: {}", dto.getEmail());
+            user = userRepository.findByEmail(dto.getEmail())
+                .orElseThrow(UserNotFoundException::new);
+        }
 
         // Delete any existing password reset tokens for this user
         passwordResetTokenRepository.deleteByUser(user);
@@ -240,16 +251,22 @@ public class AuthService {
 
         passwordResetTokenRepository.save(resetToken);
 
-        // Send password reset email
+        // Send password reset via email or SMS
         try {
-            emailService.sendPasswordResetEmail(user.getEmail(), token, user.getName());
-            log.info("Password reset email sent to: {}", user.getEmail());
+            if (deliveryMethod == OtpDeliveryMethod.SMS) {
+                String message = String.format("Seu código de redefinição de senha é: %s. Válido por 1 hora.", token);
+                smsService.sendSms(user.getPhone(), message);
+                log.info("Password reset SMS sent to: {}", user.getPhone());
+                return MessageResponseDto.of("SMS de redefinição de senha enviado com sucesso");
+            } else {
+                emailService.sendPasswordResetEmail(user.getEmail(), token, user.getName());
+                log.info("Password reset email sent to: {}", user.getEmail());
+                return MessageResponseDto.of("Email de redefinição de senha enviado com sucesso");
+            }
         } catch (Exception e) {
-            log.error("Failed to send password reset email", e);
-            throw new RuntimeException(messageService.getMessage("email.password.reset.failed"));
+            log.error("Failed to send password reset {}", deliveryMethod == OtpDeliveryMethod.SMS ? "SMS" : "email", e);
+            throw new AuthException(messageService.getMessage("password.reset.send.failed"), e);
         }
-
-        return MessageResponseDto.of("Email de redefinição de senha enviado com sucesso");
     }
 
     /**
