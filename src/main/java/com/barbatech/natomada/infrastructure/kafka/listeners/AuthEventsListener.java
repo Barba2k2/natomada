@@ -6,6 +6,7 @@ import com.barbatech.natomada.infrastructure.events.auth.UserLoggedOutEvent;
 import com.barbatech.natomada.infrastructure.events.auth.UserRegisteredEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.support.KafkaHeaders;
@@ -19,10 +20,12 @@ import org.springframework.stereotype.Component;
  * - Logging for audit trail
  * - Sending welcome emails
  * - Analytics/metrics collection
+ * Only enabled when kafka.enabled=true
  */
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "kafka.enabled", havingValue = "true", matchIfMissing = false)
 public class AuthEventsListener {
 
     /**
