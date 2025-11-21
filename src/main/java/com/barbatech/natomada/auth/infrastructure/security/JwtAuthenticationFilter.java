@@ -34,14 +34,20 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain) throws ServletException, IOException {
 
-        // Skip JWT validation for Swagger/OpenAPI and Actuator endpoints
+        // Skip JWT validation for public endpoints
         String path = request.getRequestURI();
         if (path.startsWith("/v3/api-docs") ||
             path.startsWith("/swagger-ui") ||
             path.equals("/swagger-ui.html") ||
             path.startsWith("/swagger-resources") ||
             path.startsWith("/webjars") ||
-            path.startsWith("/actuator")) {
+            path.startsWith("/actuator") ||
+            path.equals("/api/auth/register") ||
+            path.equals("/api/auth/login") ||
+            path.equals("/api/auth/refresh-token") ||
+            path.equals("/api/auth/forgot-password") ||
+            path.equals("/api/auth/validate-reset-token") ||
+            path.equals("/api/auth/reset-password")) {
             filterChain.doFilter(request, response);
             return;
         }

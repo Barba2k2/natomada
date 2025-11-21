@@ -30,29 +30,21 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    /**
+     * Security filter chain configuration
+     * - Public endpoints: /api/auth/**, /v3/api-docs/**, /swagger-ui/**, /actuator/**
+     * - Protected endpoints: all others require JWT authentication
+     */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .httpBasic(AbstractHttpConfigurer::disable)
+            .formLogin(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
-                // Public endpoints - Swagger/OpenAPI (MUST be first)
-                .requestMatchers("/v3/api-docs", "/v3/api-docs/**", "/v3/api-docs.yaml").permitAll()
-                .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/swagger-resources/**", "/webjars/**").permitAll()
-
-                // Public endpoints - Authentication
-                .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/auth/refresh-token").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/auth/forgot-password").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/auth/validate-reset-token").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/auth/reset-password").permitAll()
-
-                // Actuator endpoints
-                .requestMatchers("/actuator/health", "/actuator/info", "/actuator/**").permitAll()
-
-                // All other requests require authentication
+                .requestMatchers("/api/auth/**", "/v3/api-docs/**", "/swagger-ui/**", "/actuator/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -69,24 +61,14 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Allow frontend URL from environment
-        String frontendUrl = System.getenv("FRONTEND_URL");
-        if (frontendUrl != null && !frontendUrl.isEmpty()) {
-            if ("*".equals(frontendUrl)) {
-                // Allow all origins for production
-                configuration.setAllowedOriginPatterns(List.of("*"));
-            } else {
-                // Allow specific frontend URL
-                configuration.setAllowedOrigins(List.of(frontendUrl));
-            }
-        } else {
-            // Default to localhost for development
-            configuration.setAllowedOrigins(List.of("http://localhost:3000"));
-        }
-
+        // Allow all origins for development (including mobile apps)
+        configuration.setAllowedOriginPatterns(List.of("*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
-        configuration.setAllowCredentials(true);
+        configuration.setExposedHeaders(Arrays.asList("*"));
+        // Note: Can't use allowCredentials with allowedOriginPatterns("*") in newer Spring
+        // Mobile apps don't need credentials since they use JWT in headers
+        configuration.setAllowCredentials(false);
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
