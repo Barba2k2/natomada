@@ -24,8 +24,8 @@ public interface CarRepository extends JpaRepository<Car, Long> {
            "(:bodyType IS NULL OR c.bodyType = :bodyType) AND " +
            "(:connector IS NULL OR c.connector = :connector) AND " +
            "(:minPower IS NULL OR c.fastChargingPower >= :minPower) AND " +
-           "(:search IS NULL OR LOWER(c.brand) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(c.model) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "(:search IS NULL OR :search = '' OR LOWER(c.brand) LIKE LOWER(:search) " +
+           "OR LOWER(c.model) LIKE LOWER(:search))")
     Page<Car> findWithFilters(
         @Param("brand") String brand,
         @Param("bodyType") String bodyType,

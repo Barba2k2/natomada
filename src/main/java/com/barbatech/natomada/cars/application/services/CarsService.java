@@ -56,13 +56,18 @@ public class CarsService {
         // Create pageable
         Pageable pageable = PageRequest.of(dto.getPage() - 1, dto.getLimit(), sort);
 
+        // Prepare search parameter with wildcards
+        String searchParam = dto.getSearch() != null && !dto.getSearch().isEmpty()
+            ? "%" + dto.getSearch() + "%"
+            : dto.getSearch();
+
         // Find cars
         Page<Car> carsPage = carRepository.findWithFilters(
             dto.getBrand(),
             dto.getBodyType(),
             dto.getConnector(),
             dto.getMinPower(),
-            dto.getSearch(),
+            searchParam,
             pageable
         );
 
