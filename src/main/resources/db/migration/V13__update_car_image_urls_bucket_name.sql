@@ -1,6 +1,6 @@
--- Update existing car image URLs to use correct S3 bucket name
--- Changes from 'natomada-images' to 'na-tomada-s3-bucket'
+-- Update existing car image URLs to use correct S3 bucket name and region
+-- Changes from 'natomada-images' to 'na-tomada-s3-bucket' and 'us-east-1' to 'us-east-2'
 
 UPDATE cars
-SET image_url = REPLACE(image_url, 'natomada-images.s3.us-east-1.amazonaws.com', 'na-tomada-s3-bucket.s3.us-east-1.amazonaws.com')
-WHERE image_url LIKE '%natomada-images.s3.us-east-1.amazonaws.com%';
+SET image_url = REPLACE(REPLACE(image_url, 'natomada-images', 'na-tomada-s3-bucket'), 'us-east-1', 'us-east-2')
+WHERE image_url LIKE '%amazonaws.com%';
