@@ -125,6 +125,7 @@ services:
       SPRING_SESSION_STORE_TYPE: redis
 
       # Kafka Configuration
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SPRING_KAFKA_CONSUMER_GROUP_ID: ${KAFKA_CONSUMER_GROUP:-natomada-group}
       SPRING_KAFKA_CONSUMER_AUTO_OFFSET_RESET: earliest
@@ -182,7 +183,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 60s
+      start_period: 120s
 
   # Kafka UI (optional - for monitoring)
   kafka-ui:
