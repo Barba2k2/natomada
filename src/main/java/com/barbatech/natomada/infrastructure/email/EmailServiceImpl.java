@@ -4,6 +4,7 @@ import com.barbatech.natomada.infrastructure.i18n.MessageSourceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
@@ -11,10 +12,12 @@ import org.springframework.stereotype.Service;
 /**
  * Email Service Implementation
  *
- * Uses JavaMailSender to send emails
+ * Uses JavaMailSender to send emails via SMTP
+ * Only active in production/docker profiles
  */
 @Slf4j
 @Service
+@Profile({"prod", "docker"})
 @RequiredArgsConstructor
 public class EmailServiceImpl implements EmailService {
 
@@ -33,7 +36,7 @@ public class EmailServiceImpl implements EmailService {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(to);
-            message.setSubject("Redefinição de Senha - NaTomada");
+            message.setSubject(messageService.getMessage("email.password.reset.subject"));
             message.setText(buildPasswordResetEmailBody(token, userName));
 
             mailSender.send(message);
@@ -50,7 +53,7 @@ public class EmailServiceImpl implements EmailService {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(to);
-            message.setSubject("Bem-vindo ao NaTomada!");
+            message.setSubject(messageService.getMessage("email.welcome.subject"));
             message.setText(buildWelcomeEmailBody(userName));
 
             mailSender.send(message);
@@ -67,7 +70,7 @@ public class EmailServiceImpl implements EmailService {
             SimpleMailMessage message = new SimpleMailMessage();
             message.setFrom(fromEmail);
             message.setTo(to);
-            message.setSubject("Verificação de Email - NaTomada");
+            message.setSubject(messageService.getMessage("email.verification.subject"));
             message.setText(buildEmailVerificationBody(token, userName));
 
             mailSender.send(message);
@@ -79,62 +82,67 @@ public class EmailServiceImpl implements EmailService {
     }
 
     private String buildPasswordResetEmailBody(String token, String userName) {
-        String resetUrl = frontendUrl + "/reset-password?token=" + token;
+        String greeting = messageService.getMessage("email.password.reset.greeting", userName);
+        String body = messageService.getMessage("email.password.reset.body");
+        String codeLabel = messageService.getMessage("email.password.reset.code.label");
+        String expiry = messageService.getMessage("email.password.reset.expiry");
+        String ignore = messageService.getMessage("email.password.reset.ignore");
+        String signature = messageService.getMessage("email.password.reset.signature");
 
         return String.format("""
-            Olá %s,
-
-            Recebemos uma solicitação para redefinir sua senha no NaTomada.
-
-            Para redefinir sua senha, clique no link abaixo:
             %s
 
-            Este link expira em 1 hora.
+            %s
 
-            Se você não solicitou a redefinição de senha, ignore este email.
-            Sua senha permanecerá inalterada.
+            %s
 
-            Atenciosamente,
-            Equipe NaTomada
-            """, userName, resetUrl);
+            %s
+
+            %s
+
+            %s
+
+            %s
+            """, greeting, body, codeLabel, token, expiry, ignore, signature);
     }
 
     private String buildWelcomeEmailBody(String userName) {
+        String greeting = messageService.getMessage("email.welcome.greeting", userName);
+        String body = messageService.getMessage("email.welcome.body");
+        String cta = messageService.getMessage("email.welcome.cta", frontendUrl);
+        String signature = messageService.getMessage("email.welcome.signature");
+
         return String.format("""
-            Olá %s,
+            %s
 
-            Bem-vindo ao NaTomada! 🚗⚡
+            %s
 
-            Estamos felizes em ter você conosco. Com o NaTomada, você pode:
+            %s
 
-            • Encontrar estações de recarga próximas
-            • Salvar suas estações favoritas
-            • Gerenciar seus veículos elétricos
-            • E muito mais!
-
-            Comece explorando o aplicativo agora: %s
-
-            Atenciosamente,
-            Equipe NaTomada
-            """, userName, frontendUrl);
+            %s
+            """, greeting, body, cta, signature);
     }
 
     private String buildEmailVerificationBody(String token, String userName) {
-        String verificationUrl = frontendUrl + "/verify-email?token=" + token;
+        String greeting = messageService.getMessage("email.verification.greeting", userName);
+        String body = messageService.getMessage("email.verification.body");
+        String codeLabel = messageService.getMessage("email.verification.code.label");
+        String expiry = messageService.getMessage("email.verification.expiry");
+        String signature = messageService.getMessage("email.verification.signature");
 
         return String.format("""
-            Olá %s,
-
-            Obrigado por se cadastrar no NaTomada!
-
-            Para verificar seu email, clique no link abaixo:
             %s
 
-            Este link expira em 24 horas.
+            %s
 
-            Atenciosamente,
-            Equipe NaTomada
-            """, userName, verificationUrl);
+            %s
+
+            %s
+
+            %s
+
+            %s
+            """, greeting, body, codeLabel, token, expiry, signature);
     }
 
     @Override
