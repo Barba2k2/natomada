@@ -35,7 +35,7 @@ public class MessageSourceService {
      * @param args Argumentos para interpolação
      * @return Mensagem traduzida
      */
-    public String getMessage(String code, Object[] args) {
+    public String getMessage(String code, Object... args) {
         return messageSource.getMessage(code, args, code, getLocale());
     }
 
