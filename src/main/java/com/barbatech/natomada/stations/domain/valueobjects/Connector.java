@@ -28,12 +28,14 @@ public class Connector {
 
     private String type;
 
+    @JsonProperty("powerKW")
     private BigDecimal power;
 
     private Integer voltage;
 
     private Integer amps;
 
+    @JsonProperty("currentType")
     private String current;
 
     private Integer quantity;
