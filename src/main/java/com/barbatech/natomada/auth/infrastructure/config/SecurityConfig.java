@@ -32,7 +32,7 @@ public class SecurityConfig {
 
     /**
      * Security filter chain configuration
-     * - Public endpoints: /api/auth/**, /v3/api-docs/**, /swagger-ui/**, /actuator/**
+     * - Public endpoints: /api/auth/**, /api/cars/**, /v3/api-docs/**, /swagger-ui/**, /actuator/**
      * - Protected endpoints: all others require JWT authentication
      */
     @Bean
@@ -44,7 +44,7 @@ public class SecurityConfig {
             .httpBasic(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**", "/v3/api-docs/**", "/swagger-ui/**", "/actuator/**").permitAll()
+                .requestMatchers("/api/auth/**", "/api/cars", "/api/cars/**", "/v3/api-docs/**", "/swagger-ui/**", "/actuator/**").permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

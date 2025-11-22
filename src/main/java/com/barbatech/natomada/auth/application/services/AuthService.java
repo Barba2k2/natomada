@@ -237,11 +237,11 @@ public class AuthService {
         // Delete any existing password reset tokens for this user
         passwordResetTokenRepository.deleteByUser(user);
 
-        // Generate unique reset token
-        String token = UUID.randomUUID().toString();
+        // Generate 6-digit OTP code
+        String token = String.format("%06d", new Random().nextInt(999999));
 
-        // Create password reset token (expires in 1 hour)
-        LocalDateTime expiresAt = LocalDateTime.now().plusHours(1);
+        // Create password reset token (expires in 5 minutes)
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(5);
         PasswordResetToken resetToken = PasswordResetToken.builder()
             .token(token)
             .email(user.getEmail())
@@ -254,7 +254,7 @@ public class AuthService {
         // Send password reset via email or SMS
         try {
             if (deliveryMethod == OtpDeliveryMethod.SMS) {
-                String message = String.format("Seu código de redefinição de senha é: %s. Válido por 1 hora.", token);
+                String message = String.format("Seu código de redefinição de senha é: %s. Válido por 5 minutos.", token);
                 smsService.sendSms(user.getPhone(), message);
                 log.info("Password reset SMS sent to: {}", user.getPhone());
                 return MessageResponseDto.of("SMS de redefinição de senha enviado com sucesso");
