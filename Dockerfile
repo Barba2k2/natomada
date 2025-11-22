@@ -21,8 +21,8 @@ RUN gradle build -x test --no-daemon
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# Install wget for health checks
-RUN apk add --no-cache wget
+# Install curl for health checks (wget alternative)
+RUN apk add --no-cache curl
 
 # Create non-root user
 RUN addgroup -S spring && adduser -S spring -G spring
@@ -36,7 +36,7 @@ EXPOSE 8080
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=60s --retries=3 \
-  CMD wget --quiet --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+  CMD curl -f http://localhost:8080/actuator/health || exit 1
 
 # Run application
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]

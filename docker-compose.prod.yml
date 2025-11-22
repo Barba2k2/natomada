@@ -84,7 +84,13 @@ services:
     networks:
       - natomada-network
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      test:
+        [
+          "CMD",
+          "kafka-broker-api-versions",
+          "--bootstrap-server",
+          "localhost:9092",
+        ]
       interval: 10s
       timeout: 10s
       retries: 5
@@ -142,6 +148,18 @@ services:
       OPENCM_BASE_URL: ${OPENCM_BASE_URL:-https://api.openchargemap.io/v3}
       GOOGLE_PLACES_API_KEY: ${GOOGLE_PLACES_API_KEY}
 
+      # Email Configuration
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      APP_EMAIL_FROM: ${APP_EMAIL_FROM}
+
+      # SMS Configuration - Integraflux
+      SMS_INTEGRAFLUX_BASE_URL: ${SMS_INTEGRAFLUX_BASE_URL:-https://sms.aresfun.com}
+      SMS_INTEGRAFLUX_TOKEN: ${SMS_INTEGRAFLUX_TOKEN}
+      SMS_INTEGRAFLUX_ENABLED: ${SMS_INTEGRAFLUX_ENABLED:-true}
+
       # CORS Configuration
       FRONTEND_URL: ${FRONTEND_URL:-*}
 
@@ -154,7 +172,13 @@ services:
     networks:
       - natomada-network
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:8080/actuator/health",
+        ]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -213,7 +237,7 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
-      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./config/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
