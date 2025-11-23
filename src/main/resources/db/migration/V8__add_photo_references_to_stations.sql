@@ -2,7 +2,7 @@
 -- This will store Google Places photo references as JSON array
 
 ALTER TABLE stations
-ADD COLUMN photo_references JSONB;
+ADD COLUMN IF NOT EXISTS photo_references JSONB;
 
 -- Add index for better query performance
 CREATE INDEX IF NOT EXISTS idx_stations_photo_references ON stations USING GIN (photo_references);
