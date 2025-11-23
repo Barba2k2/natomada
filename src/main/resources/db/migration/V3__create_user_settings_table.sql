@@ -1,5 +1,5 @@
 -- Create user_settings table
-CREATE TABLE user_settings (
+CREATE TABLE IF NOT EXISTS user_settings (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL UNIQUE,
 
@@ -31,7 +31,7 @@ CREATE TABLE user_settings (
 );
 
 -- Create index
-CREATE INDEX idx_user_settings_user_id ON user_settings(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
 
 -- Comments
 COMMENT ON TABLE user_settings IS 'User preferences and settings';

@@ -1,5 +1,5 @@
 -- Create users table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -16,8 +16,8 @@ CREATE TABLE users (
 );
 
 -- Create indexes
-CREATE INDEX idx_user_email ON users(email);
-CREATE INDEX idx_user_phone ON users(phone);
+CREATE INDEX IF NOT EXISTS idx_user_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_user_phone ON users(phone);
 
 -- Comments
 COMMENT ON TABLE users IS 'User accounts table';

@@ -1,5 +1,5 @@
 -- Create refresh_tokens table
-CREATE TABLE refresh_tokens (
+CREATE TABLE IF NOT EXISTS refresh_tokens (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     token VARCHAR(500) NOT NULL UNIQUE,
@@ -10,9 +10,9 @@ CREATE TABLE refresh_tokens (
 );
 
 -- Create indexes
-CREATE INDEX idx_refresh_token_user_id ON refresh_tokens(user_id);
-CREATE INDEX idx_refresh_token_token ON refresh_tokens(token);
-CREATE INDEX idx_refresh_token_expires_at ON refresh_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_refresh_token_user_id ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_token_token ON refresh_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_refresh_token_expires_at ON refresh_tokens(expires_at);
 
 -- Comments
 COMMENT ON TABLE refresh_tokens IS 'JWT refresh tokens for authentication';

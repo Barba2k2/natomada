@@ -1,4 +1,4 @@
-CREATE TABLE search_history (
+CREATE TABLE IF NOT EXISTS search_history (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     search_query VARCHAR(500) NOT NULL,
@@ -17,5 +17,5 @@ CREATE TABLE search_history (
         ON DELETE SET NULL
 );
 
-CREATE INDEX idx_search_history_user_created ON search_history(user_id, created_at DESC);
-CREATE INDEX idx_search_history_station ON search_history(station_id);
+CREATE INDEX IF NOT EXISTS idx_search_history_user_created ON search_history(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_search_history_station ON search_history(station_id);

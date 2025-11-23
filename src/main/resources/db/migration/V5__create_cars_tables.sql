@@ -1,5 +1,5 @@
 -- Create cars table
-CREATE TABLE cars (
+CREATE TABLE IF NOT EXISTS cars (
     id BIGSERIAL PRIMARY KEY,
     brand VARCHAR(100) NOT NULL,
     model VARCHAR(100) NOT NULL,
@@ -14,12 +14,12 @@ CREATE TABLE cars (
 );
 
 -- Create indexes for cars
-CREATE INDEX idx_car_brand ON cars(brand);
-CREATE INDEX idx_car_body_type ON cars(body_type);
-CREATE INDEX idx_car_connector ON cars(connector);
+CREATE INDEX IF NOT EXISTS idx_car_brand ON cars(brand);
+CREATE INDEX IF NOT EXISTS idx_car_body_type ON cars(body_type);
+CREATE INDEX IF NOT EXISTS idx_car_connector ON cars(connector);
 
 -- Create car_translations table (i18n)
-CREATE TABLE car_translations (
+CREATE TABLE IF NOT EXISTS car_translations (
     id BIGSERIAL PRIMARY KEY,
     car_id BIGINT NOT NULL,
     locale VARCHAR(10) NOT NULL,
@@ -33,11 +33,11 @@ CREATE TABLE car_translations (
 );
 
 -- Create indexes for car_translations
-CREATE INDEX idx_car_translation_locale ON car_translations(locale);
-CREATE INDEX idx_car_translation_car_id ON car_translations(car_id);
+CREATE INDEX IF NOT EXISTS idx_car_translation_locale ON car_translations(locale);
+CREATE INDEX IF NOT EXISTS idx_car_translation_car_id ON car_translations(car_id);
 
 -- Create user_vehicles table
-CREATE TABLE user_vehicles (
+CREATE TABLE IF NOT EXISTS user_vehicles (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     car_id BIGINT NOT NULL,
@@ -59,9 +59,9 @@ CREATE TABLE user_vehicles (
 );
 
 -- Create indexes for user_vehicles
-CREATE INDEX idx_user_vehicle_user_id ON user_vehicles(user_id);
-CREATE INDEX idx_user_vehicle_car_id ON user_vehicles(car_id);
-CREATE INDEX idx_user_vehicle_is_primary ON user_vehicles(user_id, is_primary);
+CREATE INDEX IF NOT EXISTS idx_user_vehicle_user_id ON user_vehicles(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_vehicle_car_id ON user_vehicles(car_id);
+CREATE INDEX IF NOT EXISTS idx_user_vehicle_is_primary ON user_vehicles(user_id, is_primary);
 
 -- Comments
 COMMENT ON TABLE cars IS 'Electric vehicle catalog';

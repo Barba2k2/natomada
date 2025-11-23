@@ -1,5 +1,5 @@
 -- Create stations table
-CREATE TABLE stations (
+CREATE TABLE IF NOT EXISTS stations (
     id BIGSERIAL PRIMARY KEY,
 
     -- External IDs
@@ -60,14 +60,14 @@ CREATE TABLE stations (
 );
 
 -- Create indexes for stations
-CREATE INDEX idx_station_external_id ON stations(external_id);
-CREATE INDEX idx_station_ocm_id ON stations(ocm_id);
-CREATE INDEX idx_station_location ON stations(latitude, longitude);
-CREATE INDEX idx_station_country ON stations(country);
-CREATE INDEX idx_station_is_operational ON stations(is_operational);
+CREATE INDEX IF NOT EXISTS idx_station_external_id ON stations(external_id);
+CREATE INDEX IF NOT EXISTS idx_station_ocm_id ON stations(ocm_id);
+CREATE INDEX IF NOT EXISTS idx_station_location ON stations(latitude, longitude);
+CREATE INDEX IF NOT EXISTS idx_station_country ON stations(country);
+CREATE INDEX IF NOT EXISTS idx_station_is_operational ON stations(is_operational);
 
 -- Create favorites table
-CREATE TABLE favorites (
+CREATE TABLE IF NOT EXISTS favorites (
     id BIGSERIAL PRIMARY KEY,
     user_id BIGINT NOT NULL,
     station_id BIGINT NOT NULL,
@@ -85,8 +85,8 @@ CREATE TABLE favorites (
 );
 
 -- Create indexes for favorites
-CREATE INDEX idx_favorite_user_id ON favorites(user_id);
-CREATE INDEX idx_favorite_station_id ON favorites(station_id);
+CREATE INDEX IF NOT EXISTS idx_favorite_user_id ON favorites(user_id);
+CREATE INDEX IF NOT EXISTS idx_favorite_station_id ON favorites(station_id);
 
 -- Comments
 COMMENT ON TABLE stations IS 'Electric vehicle charging stations';

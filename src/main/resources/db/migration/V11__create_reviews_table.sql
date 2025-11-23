@@ -1,5 +1,5 @@
 -- Create reviews table
-CREATE TABLE reviews (
+CREATE TABLE IF NOT EXISTS reviews (
     id BIGSERIAL PRIMARY KEY,
     station_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
@@ -19,9 +19,9 @@ CREATE TABLE reviews (
 );
 
 -- Create indexes for better query performance
-CREATE INDEX idx_review_station_id ON reviews(station_id);
-CREATE INDEX idx_review_user_id ON reviews(user_id);
-CREATE INDEX idx_review_created_at ON reviews(created_at);
+CREATE INDEX IF NOT EXISTS idx_review_station_id ON reviews(station_id);
+CREATE INDEX IF NOT EXISTS idx_review_user_id ON reviews(user_id);
+CREATE INDEX IF NOT EXISTS idx_review_created_at ON reviews(created_at);
 
 -- Add comment
 COMMENT ON TABLE reviews IS 'User reviews for charging stations';
