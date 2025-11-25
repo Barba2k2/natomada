@@ -26,8 +26,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -167,33 +167,51 @@ public class AuthService {
     }
 
     /**
-     * Refresh access token using refresh token
+     * Refresh access token using refresh token.
+     *
+     * SECURITY: Implements token rotation - each use generates a new refresh token
+     * and invalidates the old one. This limits the window of opportunity if a
+     * refresh token is compromised.
      */
     @Transactional
     public LoginResponseDto refreshToken(String refreshTokenStr) {
         log.info("Refreshing access token");
 
         // Find refresh token
-        RefreshToken refreshToken = refreshTokenRepository.findByToken(refreshTokenStr)
+        RefreshToken oldRefreshToken = refreshTokenRepository.findByToken(refreshTokenStr)
             .orElseThrow(() -> new InvalidTokenException("Refresh token inválido ou expirado"));
 
         // Check if expired
-        if (refreshToken.isExpired()) {
-            refreshTokenRepository.delete(refreshToken);
+        if (oldRefreshToken.isExpired()) {
+            refreshTokenRepository.delete(oldRefreshToken);
             throw new InvalidTokenException(messageService.getMessage("token.refresh.expired"));
         }
 
         // Get user
-        User user = refreshToken.getUser();
+        User user = oldRefreshToken.getUser();
+
+        // SECURITY: Token rotation - delete old token and create new one
+        refreshTokenRepository.delete(oldRefreshToken);
 
         // Generate new access token
         String accessToken = jwtUtil.generateAccessToken(user.getId(), user.getEmail());
 
-        log.info("Access token refreshed for user: {}", user.getId());
+        // Generate new refresh token (rotation)
+        String newRefreshTokenStr = jwtUtil.generateRefreshToken();
+        LocalDateTime expiresAt = LocalDateTime.now().plusDays(7);
+        RefreshToken newRefreshToken = RefreshToken.builder()
+            .user(user)
+            .token(newRefreshTokenStr)
+            .expiresAt(expiresAt)
+            .build();
+
+        refreshTokenRepository.save(newRefreshToken);
+
+        log.info("Access token and refresh token rotated for user: {}", user.getId());
 
         return LoginResponseDto.builder()
             .accessToken(accessToken)
-            .refreshToken(refreshTokenStr) // Return same refresh token
+            .refreshToken(newRefreshTokenStr) // Return NEW refresh token
             .tokenType("Bearer")
             .expiresIn(jwtProperties.getExpiresIn() / 1000)
             .user(UserResponseDto.fromEntity(user))
@@ -237,8 +255,8 @@ public class AuthService {
         // Delete any existing password reset tokens for this user
         passwordResetTokenRepository.deleteByUser(user);
 
-        // Generate 6-digit OTP code
-        String token = String.format("%06d", new Random().nextInt(999999));
+        // SECURITY: Generate 6-digit OTP code using SecureRandom
+        String token = generateOtpCode();
 
         // Create password reset token (expires in 5 minutes)
         LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(5);
@@ -520,11 +538,12 @@ public class AuthService {
     }
 
     /**
-     * Generate a random 6-digit OTP code
+     * Generate a cryptographically secure random 6-digit OTP code.
+     * SECURITY: Uses SecureRandom to ensure unpredictable codes.
      */
     private String generateOtpCode() {
-        Random random = new Random();
-        int code = 100000 + random.nextInt(900000); // Generates 100000-999999
+        SecureRandom secureRandom = new SecureRandom();
+        int code = 100000 + secureRandom.nextInt(900000); // Generates 100000-999999
         return String.valueOf(code);
     }
 
