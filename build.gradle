@@ -57,6 +57,10 @@ dependencies {
 	implementation platform('software.amazon.awssdk:bom:2.20.26')
 	implementation 'software.amazon.awssdk:s3'
 
+	// Rate Limiting (Bucket4j with Redis backend)
+	implementation 'com.bucket4j:bucket4j-core:8.10.1'
+	implementation 'com.bucket4j:bucket4j-redis:8.10.1'
+
 	// Dev Tools
 	developmentOnly 'org.springframework.boot:spring-boot-devtools'
 
