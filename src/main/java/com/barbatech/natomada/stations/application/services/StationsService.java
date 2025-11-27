@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,7 +49,13 @@ public class StationsService {
      * 2. Fetch stations from Google Places (enrichment)
      * 3. Merge and enrich data
      * 4. Return combined results
+     *
+     * Cached for 5 minutes to improve performance (external APIs are slow)
      */
+    @Cacheable(
+        value = "nearby-stations",
+        key = "#latitude.toString().substring(0, 6) + '_' + #longitude.toString().substring(0, 6) + '_' + #radius + '_' + #limit"
+    )
     @Transactional(readOnly = true)
     public List<StationResponseDto> getNearbyStations(
         Double latitude,
