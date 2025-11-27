@@ -53,7 +53,8 @@ public class ProfileService {
             .email(user.getEmail())
             .phone(user.getPhone())
             .avatarUrl(user.getAvatarUrl())
-            .bio(user.getBio())
+            .gender(user.getGender())
+            .isPremium(user.getIsPremium())
             .emailVerifiedAt(user.getEmailVerifiedAt())
             .stats(ProfileResponseDto.ProfileStatsDto.builder()
                 .totalCharges(user.getTotalCharges())
@@ -80,8 +81,8 @@ public class ProfileService {
         if (dto.getPhone() != null) {
             user.setPhone(dto.getPhone());
         }
-        if (dto.getBio() != null) {
-            user.setBio(dto.getBio());
+        if (dto.getGender() != null) {
+            user.setGender(dto.getGender());
         }
 
         User updatedUser = userRepository.save(user);
@@ -94,7 +95,8 @@ public class ProfileService {
             .email(updatedUser.getEmail())
             .phone(updatedUser.getPhone())
             .avatarUrl(updatedUser.getAvatarUrl())
-            .bio(updatedUser.getBio())
+            .gender(updatedUser.getGender())
+            .isPremium(updatedUser.getIsPremium())
             .emailVerifiedAt(updatedUser.getEmailVerifiedAt())
             .stats(ProfileResponseDto.ProfileStatsDto.builder()
                 .totalCharges(updatedUser.getTotalCharges())
@@ -272,6 +274,38 @@ public class ProfileService {
         userRepository.save(user);
 
         return getProfile(userId);
+    }
+
+    /**
+     * Delete user account
+     */
+    @Transactional
+    public MessageResponseDto deleteAccount(Long userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new UserNotFoundException("Usuário não encontrado"));
+
+        // Delete avatar from S3 if exists
+        if (user.getAvatarUrl() != null && user.getAvatarUrl().contains("s3.")) {
+            try {
+                String s3Key = extractS3KeyFromUrl(user.getAvatarUrl());
+                s3StorageService.deleteFile(s3Key);
+            } catch (Exception e) {
+                // Log but don't fail if avatar deletion fails
+            }
+        }
+
+        // Delete all refresh tokens
+        refreshTokenRepository.deleteAllByUserId(userId);
+
+        // Delete user settings
+        userSettingsRepository.deleteByUserId(userId);
+
+        // Delete user
+        userRepository.delete(user);
+
+        return MessageResponseDto.builder()
+            .message("Conta deletada com sucesso")
+            .build();
     }
 
     /**

@@ -22,6 +22,6 @@ public class UpdateProfileRequestDto {
     @Pattern(regexp = "^\\+?[1-9]\\d{1,14}$", message = "Telefone inválido. Use formato internacional com DDI (ex: +5511999999999)")
     private String phone;
 
-    @Size(max = 500, message = "Bio deve ter no máximo 500 caracteres")
-    private String bio;
+    @Pattern(regexp = "^(Male|Female)$", message = "Gênero deve ser Male ou Female")
+    private String gender;
 }

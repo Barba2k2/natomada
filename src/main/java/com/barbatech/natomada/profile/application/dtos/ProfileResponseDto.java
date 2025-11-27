@@ -21,7 +21,8 @@ public class ProfileResponseDto {
     private String email;
     private String phone;
     private String avatarUrl;
-    private String bio;
+    private String gender;
+    private Boolean isPremium;
     private LocalDateTime emailVerifiedAt;
     private ProfileStatsDto stats;
     private LocalDateTime createdAt;

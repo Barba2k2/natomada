@@ -165,6 +165,23 @@ public class ProfileController {
             .build());
     }
 
+    /**
+     * Delete user account
+     * DELETE /api/profile
+     */
+    @Operation(summary = "Deletar conta", description = "Deleta permanentemente a conta do usuário autenticado")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "Conta deletada com sucesso"),
+        @ApiResponse(responseCode = "401", description = "Não autenticado")
+    })
+    @DeleteMapping("/profile")
+    public ResponseEntity<MessageResponseDto> deleteAccount(Authentication authentication) {
+        Long userId = Long.parseLong(authentication.getName());
+        MessageResponseDto response = profileService.deleteAccount(userId);
+
+        return ResponseEntity.ok(response);
+    }
+
     // Response wrapper classes
     @lombok.Data
     @lombok.Builder
