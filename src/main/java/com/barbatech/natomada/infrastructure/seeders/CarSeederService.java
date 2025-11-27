@@ -223,11 +223,13 @@ public class CarSeederService {
             BigDecimal batteryCapacity = parseBigDecimalOrNull(fields[3]);
             Integer fastChargingPower = parseIntOrNull(fields[10]);
             String connector = fields[11].trim();
+            String drivetrain = fields[15].trim();
             String bodyType = fields[20].trim();
 
             // Validate required fields
             if (brand.isEmpty() || model.isEmpty() || batteryCapacity == null ||
-                topSpeed == null || fastChargingPower == null || connector.isEmpty() || bodyType.isEmpty()) {
+                topSpeed == null || fastChargingPower == null || connector.isEmpty() ||
+                drivetrain.isEmpty() || bodyType.isEmpty()) {
                 log.warn("Missing required fields for car: {} {}", brand, model);
                 return null;
             }
@@ -246,6 +248,7 @@ public class CarSeederService {
                 .maxSpeed(topSpeed)
                 .fastChargingPower(fastChargingPower)
                 .connector(connector)
+                .drivetrain(drivetrain)
                 .bodyType(bodyType)
                 .imageUrl(imageUrl)
                 .build();
