@@ -9,12 +9,18 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Repository for Car entity
  */
 @Repository
 public interface CarRepository extends JpaRepository<Car, Long> {
+
+    /**
+     * Find car by brand and model
+     */
+    Optional<Car> findByBrandAndModel(String brand, String model);
 
     /**
      * Find cars with filters (without translations for now - simplified)
