@@ -41,13 +41,12 @@ public class SecurityConfig {
      * Security filter chain configuration
      *
      * Public endpoints (no authentication required):
-     * - /api/auth/** - Authentication endpoints
-     * - /api/cars/** - Vehicle catalog (public data)
+     * - /api/auth/** - Authentication endpoints (login, register, etc.)
      * - /actuator/health/** - Health checks for load balancers/k8s
      * - /v3/api-docs/**, /swagger-ui/** - API docs (disabled by default, enable with SWAGGER_ENABLED=true)
      *
-     * Protected endpoints:
-     * - All other endpoints require JWT authentication
+     * Protected endpoints (require JWT authentication):
+     * - All other endpoints require authentication
      *
      * Security features:
      * - Rate limiting on auth endpoints
@@ -65,7 +64,6 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 // Public API endpoints
                 .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/cars", "/api/cars/**").permitAll()
                 // Health checks for load balancers and Kubernetes probes
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                 // Swagger UI - access controlled by springdoc.swagger-ui.enabled property
