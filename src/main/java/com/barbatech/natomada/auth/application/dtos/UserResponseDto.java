@@ -29,7 +29,7 @@ public class UserResponseDto {
     @JsonProperty("avatar_url")
     private String avatarUrl;
 
-    private String bio;
+    private String gender;
 
     @JsonProperty("total_charges")
     private Integer totalCharges;
@@ -59,7 +59,7 @@ public class UserResponseDto {
             .email(user.getEmail())
             .phone(user.getPhone())
             .avatarUrl(user.getAvatarUrl())
-            .bio(user.getBio())
+            .gender(user.getGender())
             .totalCharges(user.getTotalCharges())
             .totalKwhCharged(user.getTotalKwhCharged())
             .totalStationsVisited(user.getTotalStationsVisited())

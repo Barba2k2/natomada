@@ -50,8 +50,12 @@ public class User {
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
-    @Column(columnDefinition = "TEXT")
-    private String bio;
+    @Column(length = 10)
+    private String gender;
+
+    @Builder.Default
+    @Column(name = "is_premium", nullable = false)
+    private Boolean isPremium = false;
 
     @Builder.Default
     @Column(name = "total_charges", nullable = false)
