@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS cars (
     fast_charging_power INTEGER NOT NULL,
     connector VARCHAR(50) NOT NULL,
     body_type VARCHAR(50) NOT NULL,
+    drivetrain VARCHAR(10),
     image_url VARCHAR(500) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -17,6 +18,7 @@ CREATE TABLE IF NOT EXISTS cars (
 CREATE INDEX IF NOT EXISTS idx_car_brand ON cars(brand);
 CREATE INDEX IF NOT EXISTS idx_car_body_type ON cars(body_type);
 CREATE INDEX IF NOT EXISTS idx_car_connector ON cars(connector);
+CREATE INDEX IF NOT EXISTS idx_car_drivetrain ON cars(drivetrain);
 
 -- Create car_translations table (i18n)
 CREATE TABLE IF NOT EXISTS car_translations (
@@ -69,6 +71,7 @@ COMMENT ON COLUMN cars.battery_capacity IS 'Battery capacity in kWh';
 COMMENT ON COLUMN cars.max_speed IS 'Maximum speed in km/h';
 COMMENT ON COLUMN cars.fast_charging_power IS 'Fast charging power in kW';
 COMMENT ON COLUMN cars.image_url IS 'URL to car image (CDN, S3, etc)';
+COMMENT ON COLUMN cars.drivetrain IS 'Vehicle drivetrain type: FWD, RWD, or AWD';
 
 COMMENT ON TABLE car_translations IS 'Translations for car information (i18n)';
 COMMENT ON COLUMN car_translations.locale IS 'Locale code (pt_BR, en_US, etc)';
