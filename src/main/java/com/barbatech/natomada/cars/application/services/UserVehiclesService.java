@@ -43,18 +43,33 @@ public class UserVehiclesService {
      */
     @Transactional
     public MessageResponseDto addUserVehicle(Long userId, AddUserVehicleRequestDto dto) {
-        log.info("Adding vehicle for user {}: carId={}", userId, dto.getCarId());
+        log.info("Adding vehicle for user {}: brand={}, model={}", userId, dto.getBrand(), dto.getModel());
 
         // Check if user exists
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("Usuário não encontrado"));
 
-        // Check if car exists
-        Car car = carRepository.findById(dto.getCarId())
-            .orElseThrow(() -> new IllegalArgumentException("Veículo não encontrado no catálogo"));
+        // Find existing car by brand and model, or create a new one
+        Car car = carRepository.findByBrandAndModel(dto.getBrand(), dto.getModel())
+            .orElseGet(() -> {
+                log.info("Creating new car entry: {} {}", dto.getBrand(), dto.getModel());
+                Car newCar = Car.builder()
+                    .brand(dto.getBrand())
+                    .model(dto.getModel())
+                    .batteryCapacity(dto.getBatteryCapacity() != null ? java.math.BigDecimal.valueOf(dto.getBatteryCapacity()) : java.math.BigDecimal.ZERO)
+                    .maxSpeed(dto.getMaxSpeed() != null ? dto.getMaxSpeed() : 0)
+                    .fastChargingPower(dto.getMaxChargingSpeed() != null ? dto.getMaxChargingSpeed() : 0)
+                    .connector(dto.getConnectorTypes() != null && !dto.getConnectorTypes().isEmpty()
+                        ? String.join(",", dto.getConnectorTypes())
+                        : "Type2")
+                    .bodyType(dto.getType() != null ? dto.getType() : "electric")
+                    .imageUrl(dto.getImageUrl())
+                    .build();
+                return carRepository.save(newCar);
+            });
 
         // Check if user already has this car
-        if (userVehicleRepository.existsByUserIdAndCarId(userId, dto.getCarId())) {
+        if (userVehicleRepository.existsByUserIdAndCarId(userId, car.getId())) {
             throw new IllegalArgumentException(messageService.getMessage("vehicle.duplicate"));
         }
 
@@ -73,6 +88,7 @@ public class UserVehiclesService {
             .nickname(dto.getNickname())
             .licensePlate(dto.getLicensePlate())
             .color(dto.getColor())
+            .year(dto.getYear())
             .isPrimary(shouldBePrimary)
             .build();
 
@@ -129,6 +145,9 @@ public class UserVehiclesService {
         }
         if (dto.getColor() != null) {
             vehicle.setColor(dto.getColor());
+        }
+        if (dto.getYear() != null) {
+            vehicle.setYear(dto.getYear());
         }
 
         userVehicleRepository.save(vehicle);
@@ -236,6 +255,7 @@ public class UserVehiclesService {
             .nickname(vehicle.getNickname())
             .licensePlate(vehicle.getLicensePlate())
             .color(vehicle.getColor())
+            .year(vehicle.getYear())
             .isPrimary(vehicle.getIsPrimary())
             .totalCharges(vehicle.getTotalCharges())
             .totalKwhCharged(vehicle.getTotalKwhCharged())
@@ -249,6 +269,7 @@ public class UserVehiclesService {
                 .fastChargingPower(car.getFastChargingPower())
                 .connector(car.getConnector())
                 .bodyType(car.getBodyType())
+                .drivetrain(car.getDrivetrain())
                 .imageUrl(car.getImageUrl()) // URL da imagem
                 .createdAt(car.getCreatedAt())
                 .updatedAt(car.getUpdatedAt())

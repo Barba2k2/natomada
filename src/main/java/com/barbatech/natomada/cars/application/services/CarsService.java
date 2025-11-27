@@ -200,6 +200,7 @@ public class CarsService {
             .fastChargingPower(car.getFastChargingPower())
             .connector(car.getConnector())
             .bodyType(car.getBodyType())
+            .drivetrain(car.getDrivetrain())
             .imageUrl(car.getImageUrl()) // URL da imagem
             .createdAt(car.getCreatedAt())
             .updatedAt(car.getUpdatedAt())
