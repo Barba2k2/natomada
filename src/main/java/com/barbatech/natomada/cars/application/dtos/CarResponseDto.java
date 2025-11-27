@@ -25,6 +25,7 @@ public class CarResponseDto {
     private Integer fastChargingPower;
     private String connector;
     private String bodyType;
+    private String drivetrain;
 
     // URL da imagem do carro
     private String imageUrl;

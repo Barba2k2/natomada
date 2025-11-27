@@ -23,4 +23,7 @@ public class UpdateUserVehicleRequestDto {
 
     @Size(max = 50, message = "Cor deve ter no máximo 50 caracteres")
     private String color;
+
+    @Size(max = 10, message = "Ano deve ter no máximo 10 caracteres")
+    private String year;
 }

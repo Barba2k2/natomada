@@ -22,6 +22,7 @@ public class UserVehicleResponseDto {
     private String nickname;
     private String licensePlate;
     private String color;
+    private String year;
     private Boolean isPrimary;
     private Integer totalCharges;
     private BigDecimal totalKwhCharged;
