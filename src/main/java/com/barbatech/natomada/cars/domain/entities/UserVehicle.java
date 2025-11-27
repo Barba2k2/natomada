@@ -53,6 +53,9 @@ public class UserVehicle {
     @Column(length = 50)
     private String color;
 
+    @Column(length = 10)
+    private String year;
+
     @Builder.Default
     @Column(name = "is_primary", nullable = false)
     private Boolean isPrimary = false;

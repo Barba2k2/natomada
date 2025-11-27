@@ -54,6 +54,9 @@ public class Car {
     @Column(name = "body_type", nullable = false, length = 50)
     private String bodyType;
 
+    @Column(length = 10)
+    private String drivetrain;
+
     // URL da imagem do carro
     @Column(name = "image_url", nullable = false, length = 500)
     private String imageUrl;
