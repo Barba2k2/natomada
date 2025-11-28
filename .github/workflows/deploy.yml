@@ -269,14 +269,6 @@ jobs:
               docker compose -f docker-compose.prod.yml exec -T postgres createdb -U postgres natomada
             fi
 
-            # Fix Flyway checksum mismatches by updating the database directly
-            echo "Updating Flyway checksums to match current migration files..."
-            docker compose -f docker-compose.prod.yml exec -T postgres psql -U postgres -d natomada <<'EOSQL' 2>/dev/null || echo "Checksum update completed or table doesn't exist"
-            UPDATE flyway_schema_history SET checksum = 1090876489 WHERE version = '5';
-            UPDATE flyway_schema_history SET checksum = 1765181841 WHERE version = '6';
-            EOSQL
-            echo "Flyway checksums updated!"
-
             # Deploy application with zero-downtime strategy
             echo "Deploying application..."
             docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate app
