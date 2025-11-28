@@ -165,6 +165,10 @@ services:
       # CORS Configuration
       FRONTEND_URL: ${FRONTEND_URL:-*}
 
+      # Monitoring Configuration
+      METRICS_USERNAME: ${METRICS_USERNAME:-metrics}
+      METRICS_PASSWORD: ${METRICS_PASSWORD:-changeme}
+
       # Application Configuration
       SERVER_PORT: 8080
       LOGGING_LEVEL_ROOT: INFO

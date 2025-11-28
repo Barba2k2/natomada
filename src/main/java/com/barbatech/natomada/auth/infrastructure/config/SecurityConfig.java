@@ -37,6 +37,12 @@ public class SecurityConfig {
     @Value("${cors.allowed-origins}")
     private String allowedOrigins;
 
+    @Value("${management.endpoints.metrics.username:metrics}")
+    private String metricsUsername;
+
+    @Value("${management.endpoints.metrics.password:changeme}")
+    private String metricsPassword;
+
     /**
      * Security filter chain configuration
      *
@@ -45,6 +51,9 @@ public class SecurityConfig {
      * - /actuator/health/** - Health checks for load balancers/k8s
      * - /v3/api-docs/**, /swagger-ui/** - API docs (disabled by default, enable with SWAGGER_ENABLED=true)
      *
+     * Protected endpoints (require Basic Authentication):
+     * - /actuator/prometheus, /actuator/metrics - Metrics endpoints for monitoring
+     *
      * Protected endpoints (require JWT authentication):
      * - All other endpoints require authentication
      *
@@ -52,6 +61,7 @@ public class SecurityConfig {
      * - Rate limiting on auth endpoints
      * - CORS with configurable allowed origins
      * - Stateless session management (JWT-based)
+     * - Basic Auth for metrics endpoints
      */
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -59,7 +69,7 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .httpBasic(AbstractHttpConfigurer::disable)
+            .httpBasic(basic -> basic.realmName("Metrics"))
             .formLogin(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
                 // Public API endpoints
@@ -68,6 +78,8 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                 // Swagger UI - access controlled by springdoc.swagger-ui.enabled property
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                // Metrics endpoints require Basic Authentication
+                .requestMatchers("/actuator/prometheus", "/actuator/metrics", "/actuator/metrics/**").hasRole("METRICS")
                 // All other endpoints require authentication
                 .anyRequest().authenticated()
             )
@@ -78,6 +90,20 @@ public class SecurityConfig {
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
+    }
+
+    @Bean
+    public org.springframework.security.core.userdetails.UserDetailsService metricsUserDetailsService() {
+        org.springframework.security.core.userdetails.User.UserBuilder users =
+            org.springframework.security.core.userdetails.User.builder();
+
+        org.springframework.security.core.userdetails.UserDetails metricsUser = users
+            .username(metricsUsername)
+            .password(passwordEncoder().encode(metricsPassword))
+            .roles("METRICS")
+            .build();
+
+        return new org.springframework.security.provisioning.InMemoryUserDetailsManager(metricsUser);
     }
 
     @Bean
