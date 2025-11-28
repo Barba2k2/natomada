@@ -256,7 +256,7 @@ jobs:
 
             # Start/Update infrastructure services first
             echo "Starting infrastructure services..."
-            docker compose -f docker-compose.prod.yml up -d postgres redis zookeeper kafka loki promtail grafana
+            docker compose -f docker-compose.prod.yml up -d postgres redis zookeeper kafka loki promtail prometheus grafana
 
             # Wait for infrastructure to be healthy
             echo "Waiting for infrastructure services..."
