@@ -25,7 +25,7 @@ public class MessageSourceService {
      * @return Mensagem traduzida
      */
     public String getMessage(String code) {
-        return getMessage(code, null);
+        return getMessage(code, (Object[]) null);
     }
 
     /**
@@ -47,7 +47,7 @@ public class MessageSourceService {
      * @return Mensagem traduzida ou padrão
      */
     public String getMessageOrDefault(String code, String defaultMessage) {
-        return messageSource.getMessage(code, null, defaultMessage, getLocale());
+        return messageSource.getMessage(code, (Object[]) null, defaultMessage, getLocale());
     }
 
     /**

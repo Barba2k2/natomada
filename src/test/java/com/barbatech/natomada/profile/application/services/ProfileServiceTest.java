@@ -55,7 +55,6 @@ class ProfileServiceTest {
             .phone("11999999999")
             .password("hashedPassword")
             .avatarUrl("https://example.com/avatar.jpg")
-            .bio("Test bio")
             .totalCharges(10)
             .totalKwhCharged(BigDecimal.valueOf(150.50))
             .totalStationsVisited(5)
@@ -102,7 +101,6 @@ class ProfileServiceTest {
         UpdateProfileRequestDto dto = UpdateProfileRequestDto.builder()
             .name("Updated Name")
             .phone("11988888888")
-            .bio("Updated bio")
             .build();
 
         when(userRepository.findById(anyLong())).thenReturn(Optional.of(testUser));
