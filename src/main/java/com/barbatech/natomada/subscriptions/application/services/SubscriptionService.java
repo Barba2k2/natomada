@@ -5,8 +5,10 @@ import com.barbatech.natomada.auth.domain.entities.User;
 import com.barbatech.natomada.auth.infrastructure.repositories.UserRepository;
 import com.barbatech.natomada.subscriptions.application.dtos.SubscriptionResponseDto;
 import com.barbatech.natomada.subscriptions.application.dtos.VerifyPurchaseRequestDto;
+import com.barbatech.natomada.subscriptions.application.exceptions.InvalidReceiptException;
 import com.barbatech.natomada.subscriptions.domain.entities.Subscription;
 import com.barbatech.natomada.subscriptions.domain.enums.SubscriptionStatus;
+import com.barbatech.natomada.subscriptions.domain.valueobjects.VerifiedPurchase;
 import com.barbatech.natomada.subscriptions.infrastructure.repositories.SubscriptionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Service for subscription operations
@@ -25,6 +28,7 @@ public class SubscriptionService {
 
     private final SubscriptionRepository subscriptionRepository;
     private final UserRepository userRepository;
+    private final List<ReceiptVerificationService> verificationServices;
 
     /**
      * Get user subscription status
@@ -51,8 +55,8 @@ public class SubscriptionService {
     /**
      * Verify and activate purchase
      *
-     * TODO: Implement actual receipt verification with Apple/Google servers
-     * For now, this is a simplified version that trusts the client
+     * Verifies receipt with Apple App Store or Google Play Store
+     * and activates premium subscription for the user
      */
     @Transactional
     public SubscriptionResponseDto verifyAndActivatePurchase(
@@ -65,9 +69,24 @@ public class SubscriptionService {
         User user = userRepository.findById(userId)
             .orElseThrow(() -> new UserNotFoundException("User not found"));
 
-        // TODO: Add actual receipt validation here
-        // For iOS: Validate with App Store Server API
-        // For Android: Validate with Google Play Developer API
+        // Find appropriate verification service for platform
+        ReceiptVerificationService verificationService = verificationServices.stream()
+            .filter(service -> service.supports(dto.getPlatform()))
+            .findFirst()
+            .orElseThrow(() -> new InvalidReceiptException(
+                "No verification service available for platform: " + dto.getPlatform()
+            ));
+
+        // Verify purchase with store backend (Apple/Google)
+        VerifiedPurchase verifiedPurchase = verificationService.verifyPurchase(dto);
+
+        if (!verifiedPurchase.isValid()) {
+            throw new InvalidReceiptException("Purchase verification failed - receipt is invalid");
+        }
+
+        log.info("Purchase verified successfully - Transaction: {}, Expires: {}",
+                verifiedPurchase.getTransactionId(),
+                verifiedPurchase.getExpirationDate());
 
         // Get or create subscription
         Subscription subscription = subscriptionRepository.findByUserId(userId)
@@ -75,24 +94,15 @@ public class SubscriptionService {
                 .user(user)
                 .build());
 
-        // Update subscription details
-        subscription.setProductId(dto.getProductId());
-        subscription.setPlatform(dto.getPlatform());
+        // Update subscription with verified data
+        subscription.setProductId(verifiedPurchase.getProductId());
+        subscription.setPlatform(verifiedPurchase.getPlatform());
         subscription.setStatus(SubscriptionStatus.ACTIVE);
-        subscription.setOriginalTransactionId(dto.getTransactionId());
-        subscription.setLatestReceiptData(dto.getPurchaseToken());
-        subscription.setStartDate(LocalDateTime.now());
-
-        // Set end date based on product (monthly = 30 days, yearly = 365 days)
-        if (dto.getProductId().contains("monthly")) {
-            subscription.setEndDate(LocalDateTime.now().plusDays(30));
-        } else if (dto.getProductId().contains("yearly")) {
-            subscription.setEndDate(LocalDateTime.now().plusDays(365));
-        } else {
-            subscription.setEndDate(LocalDateTime.now().plusDays(30)); // Default to monthly
-        }
-
-        subscription.setAutoRenewing(true);
+        subscription.setOriginalTransactionId(verifiedPurchase.getOriginalTransactionId());
+        subscription.setLatestReceiptData(verifiedPurchase.getReceiptData());
+        subscription.setStartDate(verifiedPurchase.getPurchaseDate());
+        subscription.setEndDate(verifiedPurchase.getExpirationDate());
+        subscription.setAutoRenewing(verifiedPurchase.isAutoRenewing());
 
         Subscription savedSubscription = subscriptionRepository.save(subscription);
 
