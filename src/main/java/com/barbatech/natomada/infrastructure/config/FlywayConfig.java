@@ -4,6 +4,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.output.MigrateResult;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
@@ -33,6 +34,9 @@ public class FlywayConfig {
 
         private final DataSource dataSource;
 
+        @Value("${spring.flyway.validate-on-migrate:true}")
+        private boolean validateOnMigrate;
+
         public FlywayMigrator(DataSource dataSource) {
             this.dataSource = dataSource;
         }
@@ -47,7 +51,7 @@ public class FlywayConfig {
                 .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)
-                .validateOnMigrate(true)
+                .validateOnMigrate(validateOnMigrate)
                 .outOfOrder(false)
                 .cleanDisabled(true)
                 .load();
