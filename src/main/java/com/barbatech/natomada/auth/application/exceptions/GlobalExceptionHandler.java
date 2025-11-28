@@ -2,6 +2,8 @@ package com.barbatech.natomada.auth.application.exceptions;
 
 import com.barbatech.natomada.reviews.application.exceptions.ReviewExpiredException;
 import com.barbatech.natomada.reviews.application.exceptions.ReviewNotFoundException;
+import com.barbatech.natomada.subscriptions.application.exceptions.InvalidReceiptException;
+import com.barbatech.natomada.subscriptions.application.exceptions.ReceiptVerificationException;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.HttpStatus;
@@ -115,6 +117,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ReviewNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleReviewNotFound(ReviewNotFoundException ex) {
         return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler(InvalidReceiptException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidReceipt(InvalidReceiptException ex) {
+        String message = getMessage("subscription.invalid.receipt");
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, message);
+    }
+
+    @ExceptionHandler(ReceiptVerificationException.class)
+    public ResponseEntity<ErrorResponse> handleReceiptVerification(ReceiptVerificationException ex) {
+        String message = getMessage("subscription.verification.failed");
+        return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, message);
     }
 
     private ResponseEntity<ErrorResponse> buildErrorResponse(HttpStatus status, String message) {
