@@ -9,6 +9,7 @@ import com.barbatech.natomada.stations.infrastructure.external.google.dtos.Googl
 import com.barbatech.natomada.stations.infrastructure.external.google.dtos.PlacesV1Response;
 import com.barbatech.natomada.stations.infrastructure.external.opencm.OpenChargeMapService;
 import com.barbatech.natomada.stations.infrastructure.external.opencm.dtos.OpenChargeMapResponse;
+import com.barbatech.natomada.stations.infrastructure.repositories.FavoriteRepository;
 import com.barbatech.natomada.stations.infrastructure.repositories.StationRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,6 +33,7 @@ import java.util.stream.Collectors;
 public class StationsService {
 
     private final StationRepository stationRepository;
+    private final FavoriteRepository favoriteRepository;
     private final OpenChargeMapService openChargeMapService;
     private final GooglePlacesService googlePlacesService;
     private final ExternalStationMapper externalStationMapper;
@@ -54,14 +56,15 @@ public class StationsService {
      */
     @Cacheable(
         value = "nearby-stations",
-        key = "#latitude.toString().substring(0, 6) + '_' + #longitude.toString().substring(0, 6) + '_' + #radius + '_' + #limit"
+        key = "#latitude.toString().substring(0, 6) + '_' + #longitude.toString().substring(0, 6) + '_' + #radius + '_' + #limit + '_' + (#userId != null ? #userId : 'anon')"
     )
-    @Transactional(readOnly = true)
+    @Transactional
     public List<StationResponseDto> getNearbyStations(
         Double latitude,
         Double longitude,
         Integer radius,
-        Integer limit
+        Integer limit,
+        Long userId
     ) {
         log.info("Fetching nearby stations from external APIs: lat={}, lon={}, radius={}m, limit={}",
                  latitude, longitude, radius, limit);
@@ -107,15 +110,36 @@ public class StationsService {
             log.error("Error fetching from Google Places v1: {}", e.getMessage(), e);
         }
 
-        // Step 3: Limit results
-        if (limit != null && allStations.size() > limit) {
-            allStations = allStations.subList(0, limit);
+        // Step 3: Save all stations to database for future fast access
+        List<Station> savedStations = new ArrayList<>();
+        for (Station station : allStations) {
+            try {
+                // Check if station already exists
+                Optional<Station> existing = stationRepository.findByOcmId(station.getOcmId());
+                if (existing.isPresent()) {
+                    savedStations.add(existing.get());
+                } else {
+                    // Save new station
+                    Station saved = stationRepository.save(station);
+                    log.debug("Cached station in database: {} (ID: {})", saved.getOcmId(), saved.getId());
+                    savedStations.add(saved);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to save station {} to database: {}", station.getOcmId(), e.getMessage());
+                savedStations.add(station); // Add unsaved station anyway
+            }
         }
 
-        log.info("Returning {} total stations", allStations.size());
+        // Step 4: Limit results
+        if (limit != null && savedStations.size() > limit) {
+            savedStations = savedStations.subList(0, limit);
+        }
 
-        return allStations.stream()
-            .map(this::mapToResponse)
+        log.info("Returning {} total stations ({} cached in database)", savedStations.size(),
+                 savedStations.stream().filter(s -> s.getId() != null).count());
+
+        return savedStations.stream()
+            .map(station -> mapToResponse(station, userId))
             .collect(Collectors.toList());
     }
 
@@ -219,7 +243,7 @@ public class StationsService {
     /**
      * Map Station entity to response DTO
      */
-    private StationResponseDto mapToResponse(Station station) {
+    private StationResponseDto mapToResponse(Station station, Long userId) {
         // Parse photo references from JSON and convert to URLs
         List<String> photoUrls = new ArrayList<>();
         if (station.getPhotoReferences() != null) {
@@ -240,6 +264,12 @@ public class StationsService {
 
         // Amenities are now type-safe - no JSON parsing needed
         // Following Axel Engineering Doctrine: explicit types over strings
+
+        // Check if station is in user's favorites
+        boolean isFavorite = false;
+        if (userId != null && station.getId() != null) {
+            isFavorite = favoriteRepository.existsByUserIdAndStationId(userId, station.getId());
+        }
 
         return StationResponseDto.builder()
             .id(station.getId())
@@ -286,6 +316,7 @@ public class StationsService {
             .lastVerifiedAt(station.getLastVerifiedAt())
             .isRecentlyVerified(station.getIsRecentlyVerified())
             .lastSyncAt(station.getLastSyncAt())
+            .isFavorite(isFavorite)
             .build();
     }
 
@@ -293,95 +324,20 @@ public class StationsService {
      * Get station by ID from external APIs (OpenChargeMap + Google Places)
      *
      * @param stationId The station ID (format: "ocm_123456")
+     * @param userId The user ID (optional, for checking favorite status)
      * @return Station details
      */
-    public StationResponseDto getStationById(String stationId) {
-        log.info("Fetching station by ID from external APIs: {}", stationId);
+    public StationResponseDto getStationById(String stationId, Long userId) {
+        log.info("Fetching station by ID: {}", stationId);
 
-        // Parse OCM ID from external ID format (e.g., "ocm_188927" -> 188927)
-        Integer ocmId;
-        try {
-            ocmId = Integer.parseInt(stationId.replace("ocm_", ""));
-        } catch (NumberFormatException e) {
-            log.error("Invalid station ID format: {}", stationId);
-            throw new RuntimeException(messageService.getMessage("station.id.invalid"));
-        }
+        // Use getOrFetchStationByOcmId to ensure station is saved in database
+        // This is necessary for favorites functionality (needs database ID)
+        // This method already handles enrichment with Google Places data
+        Station station = getOrFetchStationByOcmId(stationId);
 
-        // Fetch from OpenChargeMap API
-        OpenChargeMapResponse ocmStation = openChargeMapService.getById(ocmId);
-        if (ocmStation == null) {
-            log.error("Station not found in OpenChargeMap: {}", stationId);
-            throw new RuntimeException(messageService.getMessage("station.not.found"));
-        }
+        log.info("Found station: {} (rating: {})", station.getName(), station.getCombinedRating());
 
-        // Convert to Station entity
-        Station station = externalStationMapper.fromOpenChargeMap(ocmStation);
-
-        // Try to enrich with Google Places data
-        boolean enriched = false;
-
-        // Always try Places API v1 for EV connector data (has availability info)
-        if (station.getLatitude() != null && station.getLongitude() != null) {
-            try {
-                log.info("Trying Places API v1 nearby search for station details");
-                PlacesV1Response placesV1Response = googlePlacesService.searchNearbyV1(
-                    station.getLatitude().doubleValue(),
-                    station.getLongitude().doubleValue(),
-                    150 // 150 meters radius for detail lookup
-                );
-
-                if (placesV1Response != null && placesV1Response.getPlaces() != null && !placesV1Response.getPlaces().isEmpty()) {
-                    // Find closest match
-                    double minDistance = Double.MAX_VALUE;
-                    PlacesV1Response.Place closestPlace = null;
-
-                    for (PlacesV1Response.Place place : placesV1Response.getPlaces()) {
-                        if (place.getLocation() != null && place.getLocation().getLatitude() != null && place.getLocation().getLongitude() != null) {
-                            double distance = calculateDistance(
-                                station.getLatitude().doubleValue(),
-                                station.getLongitude().doubleValue(),
-                                place.getLocation().getLatitude().doubleValue(),
-                                place.getLocation().getLongitude().doubleValue()
-                            );
-
-                            if (distance < minDistance) {
-                                minDistance = distance;
-                                closestPlace = place;
-                            }
-                        }
-                    }
-
-                    // If within 150 meters, consider it a match (same threshold as list view)
-                    if (closestPlace != null && minDistance < 0.15) {
-                        externalStationMapper.enrichWithGooglePlacesV1(station, closestPlace);
-                        enriched = true;
-                        log.info("Enriched station with Google Places v1 API (distance: {}m)", minDistance * 111000);
-
-                        // If no photos available, try to find nearby business with photos
-                        if (station.getPhotoReferences() == null || station.getPhotoReferences().equals("[]")) {
-                            tryEnrichWithNearbyBusinessPhotos(station);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Could not enrich station with Google Places v1 nearby search: {}", e.getMessage());
-            }
-        }
-
-        // Strategy 3: If still no photos and we have coordinates, add Street View as fallback
-        if (enriched && station.getLatitude() != null && station.getLongitude() != null) {
-            if (station.getPhotoReferences() == null || station.getPhotoReferences().equals("[]")) {
-                addStreetViewPhoto(station);
-            }
-        }
-
-        if (!enriched) {
-            log.warn("Station {} could not be enriched with Google Places data", station.getName());
-        }
-
-        log.info("Found station from APIs: {} (rating: {})", station.getName(), station.getCombinedRating());
-
-        return mapToResponse(station);
+        return mapToResponse(station, userId);
     }
 
     /**
@@ -463,6 +419,95 @@ public class StationsService {
         } catch (Exception e) {
             log.warn("Error adding Street View photo: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Get or fetch station by OCM ID
+     * First tries to find in database, if not found fetches from external APIs and saves
+     *
+     * @param ocmId The OpenChargeMap ID (format: "ocm_123")
+     * @return Station entity (from DB or freshly fetched and saved)
+     */
+    @Transactional
+    public Station getOrFetchStationByOcmId(String ocmId) {
+        log.info("Getting or fetching station by OCM ID: {}", ocmId);
+
+        // Try to find in database first
+        Optional<Station> existingStation = stationRepository.findByOcmId(ocmId);
+        if (existingStation.isPresent()) {
+            log.info("Station found in database: {}", ocmId);
+            return existingStation.get();
+        }
+
+        // Not in database, fetch from external APIs
+        log.info("Station not in database, fetching from external APIs: {}", ocmId);
+
+        // Parse OCM ID to integer
+        Integer ocmIdInt;
+        try {
+            ocmIdInt = Integer.parseInt(ocmId.replace("ocm_", ""));
+        } catch (NumberFormatException e) {
+            log.error("Invalid OCM ID format: {}", ocmId);
+            throw new IllegalArgumentException(messageService.getMessage("station.id.invalid"));
+        }
+
+        // Fetch from OpenChargeMap API
+        OpenChargeMapResponse ocmStation = openChargeMapService.getById(ocmIdInt);
+        if (ocmStation == null) {
+            log.error("Station not found in OpenChargeMap: {}", ocmId);
+            throw new RuntimeException(messageService.getMessage("station.not.found"));
+        }
+
+        // Convert to Station entity
+        Station station = externalStationMapper.fromOpenChargeMap(ocmStation);
+
+        // Try to enrich with Google Places data (same logic as getStationById)
+        if (station.getLatitude() != null && station.getLongitude() != null) {
+            try {
+                log.info("Enriching station with Google Places v1 data");
+                PlacesV1Response placesV1Response = googlePlacesService.searchNearbyV1(
+                    station.getLatitude().doubleValue(),
+                    station.getLongitude().doubleValue(),
+                    150 // 150 meters radius
+                );
+
+                if (placesV1Response != null && placesV1Response.getPlaces() != null && !placesV1Response.getPlaces().isEmpty()) {
+                    // Find closest match
+                    double minDistance = Double.MAX_VALUE;
+                    PlacesV1Response.Place closestPlace = null;
+
+                    for (PlacesV1Response.Place place : placesV1Response.getPlaces()) {
+                        if (place.getLocation() != null) {
+                            double distance = calculateDistance(
+                                station.getLatitude().doubleValue(),
+                                station.getLongitude().doubleValue(),
+                                place.getLocation().getLatitude().doubleValue(),
+                                place.getLocation().getLongitude().doubleValue()
+                            );
+
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                closestPlace = place;
+                            }
+                        }
+                    }
+
+                    // If within 150 meters, enrich
+                    if (closestPlace != null && minDistance < 0.15) {
+                        externalStationMapper.enrichWithGooglePlacesV1(station, closestPlace);
+                        log.info("Enriched station with Google Places v1 data (distance: {}m)", minDistance * 111000);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Could not enrich station with Google Places: {}", e.getMessage());
+            }
+        }
+
+        // Save to database
+        Station savedStation = stationRepository.save(station);
+        log.info("Station saved to database: {} (ID: {})", savedStation.getOcmId(), savedStation.getId());
+
+        return savedStation;
     }
 
     /**

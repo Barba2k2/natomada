@@ -48,6 +48,7 @@ public class StationResponseDto {
     private LocalDateTime lastVerifiedAt;
     private Boolean isRecentlyVerified;
     private LocalDateTime lastSyncAt;
+    private Boolean isFavorite; // Whether this station is in the user's favorites
 
     @Data
     @Builder

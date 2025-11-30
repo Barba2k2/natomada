@@ -64,13 +64,13 @@ public class FavoritesController {
     @PostMapping("/{id}/favorite")
     public ResponseEntity<MessageResponseDto> addFavorite(
         Authentication authentication,
-        @Parameter(description = "ID da estação", required = true) @PathVariable Long id,
+        @Parameter(description = "ID da estação (pode ser ocm_123 ou ID numérico)", required = true) @PathVariable String id,
         @Valid @RequestBody(required = false) AddFavoriteRequestDto dto
     ) {
         Long userId = Long.parseLong(authentication.getName());
         String notes = dto != null ? dto.getNotes() : null;
 
-        MessageResponseDto response = favoritesService.addFavorite(userId, id, notes);
+        MessageResponseDto response = favoritesService.addFavoriteByOcmId(userId, id, notes);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -88,10 +88,10 @@ public class FavoritesController {
     @DeleteMapping("/{id}/unfavorite")
     public ResponseEntity<MessageResponseDto> removeFavorite(
         Authentication authentication,
-        @Parameter(description = "ID da estação", required = true) @PathVariable Long id
+        @Parameter(description = "ID da estação (pode ser ocm_123 ou ID numérico)", required = true) @PathVariable String id
     ) {
         Long userId = Long.parseLong(authentication.getName());
-        MessageResponseDto response = favoritesService.removeFavorite(userId, id);
+        MessageResponseDto response = favoritesService.removeFavoriteByOcmId(userId, id);
 
         return ResponseEntity.ok(response);
     }
@@ -103,10 +103,10 @@ public class FavoritesController {
     @GetMapping("/{id}/is-favorite")
     public ResponseEntity<FavoritesService.CheckFavoriteResponse> checkIsFavorite(
         Authentication authentication,
-        @PathVariable Long id
+        @Parameter(description = "ID da estação (pode ser ocm_123 ou ID numérico)", required = true) @PathVariable String id
     ) {
         Long userId = Long.parseLong(authentication.getName());
-        FavoritesService.CheckFavoriteResponse response = favoritesService.checkIsFavorite(userId, id);
+        FavoritesService.CheckFavoriteResponse response = favoritesService.checkIsFavoriteByOcmId(userId, id);
 
         return ResponseEntity.ok(response);
     }

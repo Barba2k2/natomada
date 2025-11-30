@@ -39,6 +39,18 @@ public class ExternalStationMapper {
     public Station fromOpenChargeMap(OpenChargeMapResponse ocm) {
         Station station = new Station();
 
+        // Initialize fields with database defaults (since we're not using builder)
+        station.setRequiresMembership(false);
+        station.setPayAtLocation(false);
+        station.setRequiresAccessKey(false);
+        station.setIsOperational(true);
+        station.setIsOpen24h(false);
+        station.setIsRecentlyVerified(false);
+        station.setTotalConnectors(0);
+        station.setOcmReviewCount(0);
+        station.setGoogleReviewCount(0);
+        station.setTotalReviews(0);
+
         // IDs
         station.setOcmId(ocm.getId() != null ? "ocm_" + ocm.getId() : null);
         station.setOcmUuid(ocm.getUuid());
@@ -73,16 +85,17 @@ public class ExternalStationMapper {
         if (ocm.getUsageType() != null) {
             OpenChargeMapResponse.UsageType usage = ocm.getUsageType();
             station.setUsageType(usage.getTitle());
-            station.setPayAtLocation(usage.getIsPayAtLocation());
-            station.setRequiresMembership(usage.getIsMembershipRequired());
-            station.setRequiresAccessKey(usage.getIsAccessKeyRequired());
+            // Use Boolean.TRUE.equals() to safely handle null values (defaults to false)
+            station.setPayAtLocation(Boolean.TRUE.equals(usage.getIsPayAtLocation()));
+            station.setRequiresMembership(Boolean.TRUE.equals(usage.getIsMembershipRequired()));
+            station.setRequiresAccessKey(Boolean.TRUE.equals(usage.getIsAccessKeyRequired()));
         }
 
         // Cost
         station.setUsageCost(ocm.getUsageCost());
 
         // Status
-        if (ocm.getStatusType() != null) {
+        if (ocm.getStatusType() != null && ocm.getStatusType().getIsOperational() != null) {
             station.setIsOperational(ocm.getStatusType().getIsOperational());
         }
 

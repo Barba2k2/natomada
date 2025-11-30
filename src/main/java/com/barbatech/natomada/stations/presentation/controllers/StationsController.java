@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -39,10 +40,14 @@ public class StationsController {
     })
     @GetMapping("/{id}")
     public ResponseEntity<StationDetailResponse> getStationById(
+        Authentication authentication,
         @Parameter(description = "ID da estação (pode ser ocm_123 ou external ID)", example = "ocm_217270", required = true)
         @PathVariable String id
     ) {
-        StationResponseDto station = stationsService.getStationById(id);
+        // Extract userId if authenticated (optional - endpoint is public)
+        Long userId = authentication != null ? Long.parseLong(authentication.getName()) : null;
+
+        StationResponseDto station = stationsService.getStationById(id, userId);
 
         return ResponseEntity.ok(StationDetailResponse.builder()
             .data(station)
@@ -63,6 +68,7 @@ public class StationsController {
     })
     @GetMapping("/nearby")
     public ResponseEntity<NearbyStationsResponse> getNearbyStations(
+        Authentication authentication,
         @Parameter(description = "Latitude da localização de busca", example = "-23.5629", required = true)
         @RequestParam @NotNull(message = "Latitude é obrigatória")
         @DecimalMin(value = "-90.0") @DecimalMax(value = "90.0") Double latitude,
@@ -79,8 +85,11 @@ public class StationsController {
         @RequestParam(required = false, defaultValue = "20")
         @Min(value = 1) @Max(value = 100) Integer limit
     ) {
+        // Extract userId if authenticated (optional - endpoint is public)
+        Long userId = authentication != null ? Long.parseLong(authentication.getName()) : null;
+
         List<StationResponseDto> stations = stationsService.getNearbyStations(
-            latitude, longitude, radius, limit
+            latitude, longitude, radius, limit, userId
         );
 
         return ResponseEntity.ok(NearbyStationsResponse.builder()

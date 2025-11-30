@@ -34,6 +34,9 @@ public class OpeningHours {
     @JsonProperty("weekday_text")
     private List<String> weekdayText;
 
+    @JsonProperty("openNow")
+    private Boolean openNow;
+
     /**
      * Nested Value Object: DaySchedule
      *

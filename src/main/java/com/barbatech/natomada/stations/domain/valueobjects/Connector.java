@@ -45,6 +45,15 @@ public class Connector {
     @JsonProperty("is_operational")
     private Boolean isOperational;
 
+    @JsonProperty("fastCharging")
+    private Boolean fastCharging;
+
+    @JsonProperty("ultraFastCharging")
+    private Boolean ultraFastCharging;
+
+    @JsonProperty("available")
+    private Boolean available;
+
     /**
      * Domain logic: Check if connector is available
      *

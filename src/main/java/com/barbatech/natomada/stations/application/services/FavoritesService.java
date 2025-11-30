@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class FavoritesService {
 
     private final FavoriteRepository favoriteRepository;
@@ -35,6 +34,24 @@ public class FavoritesService {
     private final UserRepository userRepository;
     private final EventPublisher eventPublisher;
     private final MessageSourceService messageService;
+    private final StationsService stationsService;
+
+    // Constructor with @Lazy to break circular dependency
+    public FavoritesService(
+        FavoriteRepository favoriteRepository,
+        StationRepository stationRepository,
+        UserRepository userRepository,
+        EventPublisher eventPublisher,
+        MessageSourceService messageService,
+        @org.springframework.context.annotation.Lazy StationsService stationsService
+    ) {
+        this.favoriteRepository = favoriteRepository;
+        this.stationRepository = stationRepository;
+        this.userRepository = userRepository;
+        this.eventPublisher = eventPublisher;
+        this.messageService = messageService;
+        this.stationsService = stationsService;
+    }
 
     /**
      * Get all favorites for a user
@@ -132,6 +149,57 @@ public class FavoritesService {
         return CheckFavoriteResponse.builder()
             .isFavorite(isFavorite)
             .build();
+    }
+
+    /**
+     * Add station to favorites by OCM ID
+     * Accepts both "ocm_123" and numeric ID formats
+     */
+    @Transactional
+    public MessageResponseDto addFavoriteByOcmId(Long userId, String stationId, String notes) {
+        Long internalId = resolveStationId(stationId);
+        return addFavorite(userId, internalId, notes);
+    }
+
+    /**
+     * Remove station from favorites by OCM ID
+     * Accepts both "ocm_123" and numeric ID formats
+     */
+    @Transactional
+    public MessageResponseDto removeFavoriteByOcmId(Long userId, String stationId) {
+        Long internalId = resolveStationId(stationId);
+        return removeFavorite(userId, internalId);
+    }
+
+    /**
+     * Check if station is favorited by OCM ID
+     * Accepts both "ocm_123" and numeric ID formats
+     */
+    @Transactional(readOnly = true)
+    public CheckFavoriteResponse checkIsFavoriteByOcmId(Long userId, String stationId) {
+        Long internalId = resolveStationId(stationId);
+        return checkIsFavorite(userId, internalId);
+    }
+
+    /**
+     * Resolve station ID from OCM ID or numeric ID
+     * Returns the internal database ID
+     * If station doesn't exist in database, fetches from external APIs and saves it
+     */
+    private Long resolveStationId(String stationId) {
+        // Try to parse as Long first (for backward compatibility)
+        try {
+            return Long.parseLong(stationId);
+        } catch (NumberFormatException e) {
+            // Not a number, must be OCM ID format
+            log.debug("Resolving station by OCM ID: {}", stationId);
+
+            // Use StationsService to get or fetch station
+            // This will fetch from external APIs and save if not in database
+            Station station = stationsService.getOrFetchStationByOcmId(stationId);
+
+            return station.getId();
+        }
     }
 
     /**
