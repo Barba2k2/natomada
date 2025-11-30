@@ -5,6 +5,8 @@ import com.barbatech.natomada.reviews.application.dtos.CreateReviewRequestDto;
 import com.barbatech.natomada.reviews.application.dtos.ReviewResponseDto;
 import com.barbatech.natomada.reviews.application.dtos.UpdateReviewRequestDto;
 import com.barbatech.natomada.reviews.application.services.ReviewService;
+import com.barbatech.natomada.stations.application.services.StationsService;
+import com.barbatech.natomada.stations.domain.entities.Station;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -35,6 +37,7 @@ import java.util.List;
 public class ReviewsController {
 
     private final ReviewService reviewService;
+    private final StationsService stationsService;
 
     /**
      * Submit a new review
@@ -51,11 +54,12 @@ public class ReviewsController {
     @PostMapping("/station/{stationId}")
     public ResponseEntity<ReviewResponse> submitReview(
         Authentication authentication,
-        @Parameter(description = "ID da estação", required = true) @PathVariable Long stationId,
+        @Parameter(description = "ID da estação (pode ser ocm_123 ou ID numérico)", required = true) @PathVariable String stationId,
         @Valid @RequestBody CreateReviewRequestDto request
     ) {
         Long userId = Long.parseLong(authentication.getName());
-        ReviewResponseDto review = reviewService.submitReview(userId, stationId, request);
+        Long internalStationId = resolveStationId(stationId);
+        ReviewResponseDto review = reviewService.submitReview(userId, internalStationId, request);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(ReviewResponse.builder()
             .success(true)
@@ -154,6 +158,23 @@ public class ReviewsController {
         return ResponseEntity.ok(MessageResponseDto.builder()
             .message("Avaliação deletada com sucesso")
             .build());
+    }
+
+    /**
+     * Resolve station ID from OCM format or numeric ID
+     *
+     * @param stationId Station ID (can be "ocm_123" or "123")
+     * @return Internal database station ID
+     */
+    private Long resolveStationId(String stationId) {
+        try {
+            // Try to parse as numeric ID
+            return Long.parseLong(stationId);
+        } catch (NumberFormatException e) {
+            // It's an OCM ID, fetch/create station and get internal ID
+            Station station = stationsService.getOrFetchStationByOcmId(stationId);
+            return station.getId();
+        }
     }
 
     // Response wrapper classes
