@@ -44,8 +44,7 @@ public class StationsController {
         @Parameter(description = "ID da estação (pode ser ocm_123 ou external ID)", example = "ocm_217270", required = true)
         @PathVariable String id
     ) {
-        // Extract userId if authenticated (optional - endpoint is public)
-        Long userId = authentication != null ? Long.parseLong(authentication.getName()) : null;
+        Long userId = Long.parseLong(authentication.getName());
 
         StationResponseDto station = stationsService.getStationById(id, userId);
 
@@ -83,10 +82,9 @@ public class StationsController {
 
         @Parameter(description = "Limite de resultados", example = "20")
         @RequestParam(required = false, defaultValue = "20")
-        @Min(value = 1) @Max(value = 100) Integer limit
+        @Min(value = 1) @Max(value = 1000) Integer limit
     ) {
-        // Extract userId if authenticated (optional - endpoint is public)
-        Long userId = authentication != null ? Long.parseLong(authentication.getName()) : null;
+        Long userId = Long.parseLong(authentication.getName());
 
         List<StationResponseDto> stations = stationsService.getNearbyStations(
             latitude, longitude, radius, limit, userId
