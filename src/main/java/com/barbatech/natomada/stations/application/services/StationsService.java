@@ -110,9 +110,36 @@ public class StationsService {
             log.error("Error fetching from Google Places v1: {}", e.getMessage(), e);
         }
 
-        // Step 3: Save all stations to database for future fast access
-        List<Station> savedStations = new ArrayList<>();
+        // Step 3: Filter stations by actual distance (OpenChargeMap may return stations beyond radius)
+        List<Station> stationsWithinRadius = new ArrayList<>();
         for (Station station : allStations) {
+            if (station.getLatitude() != null && station.getLongitude() != null) {
+                double distanceKm = calculateHaversineDistance(
+                    latitude,
+                    longitude,
+                    station.getLatitude().doubleValue(),
+                    station.getLongitude().doubleValue()
+                );
+
+                // Only include stations within the requested radius
+                double radiusKm = radius / 1000.0;
+                if (distanceKm <= radiusKm) {
+                    stationsWithinRadius.add(station);
+                } else {
+                    log.debug("Excluding station {} - distance {}km exceeds radius {}km",
+                             station.getName(), distanceKm, radiusKm);
+                }
+            } else {
+                stationsWithinRadius.add(station); // Include stations without coordinates
+            }
+        }
+
+        log.info("Filtered {} stations to {} within {}km radius",
+                 allStations.size(), stationsWithinRadius.size(), radius / 1000.0);
+
+        // Step 4: Save all stations to database for future fast access
+        List<Station> savedStations = new ArrayList<>();
+        for (Station station : stationsWithinRadius) {
             try {
                 // Check if station already exists
                 Optional<Station> existing = stationRepository.findByOcmId(station.getOcmId());
@@ -130,7 +157,7 @@ public class StationsService {
             }
         }
 
-        // Step 4: Limit results
+        // Step 5: Limit results
         if (limit != null && savedStations.size() > limit) {
             savedStations = savedStations.subList(0, limit);
         }
@@ -238,6 +265,25 @@ public class StationsService {
         double latDiff = lat1 - lat2;
         double lonDiff = lon1 - lon2;
         return Math.sqrt(latDiff * latDiff + lonDiff * lonDiff);
+    }
+
+    /**
+     * Calculate accurate distance between two coordinates using Haversine formula
+     * Returns distance in kilometers
+     */
+    private double calculateHaversineDistance(double lat1, double lon1, double lat2, double lon2) {
+        final double earthRadiusKm = 6371.0;
+
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                   Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) *
+                   Math.sin(dLon / 2) * Math.sin(dLon / 2);
+
+        double c = 2 * Math.asin(Math.sqrt(a));
+
+        return earthRadiusKm * c;
     }
 
     /**
