@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -44,49 +45,99 @@ public class SecurityConfig {
     private String metricsPassword;
 
     /**
-     * Security filter chain configuration
+     * Security filter chain for metrics endpoints ONLY
+     * Uses Basic Authentication for Prometheus/Grafana access
+     * Must be @Order(1) to be evaluated before the main API filter chain
+     */
+    @Bean
+    @Order(1)
+    public SecurityFilterChain metricsSecurityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .securityMatcher(
+                request -> {
+                    String path = request.getRequestURI();
+                    // Only match actuator metrics endpoints, NEVER /api/** endpoints
+                    return (path.equals("/actuator/prometheus") ||
+                           path.equals("/actuator/metrics") ||
+                           path.startsWith("/actuator/metrics/"));
+                }
+            )
+            .csrf(AbstractHttpConfigurer::disable)
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .httpBasic(basic -> basic.realmName("Metrics"))
+            .authorizeHttpRequests(auth -> auth
+                .anyRequest().hasRole("METRICS")
+            );
+
+        return http.build();
+    }
+
+    /**
+     * Main security filter chain for API endpoints
+     * Uses JWT authentication for all API endpoints
      *
      * Public endpoints (no authentication required):
-     * - /api/auth/** - Authentication endpoints (login, register, etc.)
+     * - /api/auth/login, /api/auth/register, /api/auth/refresh
+     * - /api/auth/forgot-password, /api/auth/reset-password
+     * - /api/auth/send-otp, /api/auth/verify-otp
      * - /actuator/health/** - Health checks for load balancers/k8s
-     * - /v3/api-docs/**, /swagger-ui/** - API docs (disabled by default, enable with SWAGGER_ENABLED=true)
-     *
-     * Protected endpoints (require Basic Authentication):
-     * - /actuator/prometheus, /actuator/metrics - Metrics endpoints for monitoring
+     * - /v3/api-docs/**, /swagger-ui/** - API docs
      *
      * Protected endpoints (require JWT authentication):
-     * - All other endpoints require authentication
+     * - /api/auth/logout, /api/auth/me
+     * - All other /api/** endpoints
      *
      * Security features:
      * - Rate limiting on auth endpoints
      * - CORS with configurable allowed origins
      * - Stateless session management (JWT-based)
-     * - Basic Auth for metrics endpoints
      */
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    @Order(2)
+    public SecurityFilterChain apiSecurityFilterChain(HttpSecurity http) throws Exception {
         http
+            .securityMatcher(
+                request -> {
+                    String path = request.getRequestURI();
+                    // Match all /api/** endpoints and public paths (health, swagger)
+                    return path.startsWith("/api/") ||
+                           path.startsWith("/actuator/health") ||
+                           path.startsWith("/actuator/info") ||
+                           path.startsWith("/v3/api-docs") ||
+                           path.startsWith("/swagger-ui");
+                }
+            )
             .csrf(AbstractHttpConfigurer::disable)
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .httpBasic(basic -> basic.realmName("Metrics"))
             .formLogin(AbstractHttpConfigurer::disable)
+            .httpBasic(AbstractHttpConfigurer::disable)  // Disable Basic Auth for API endpoints
             .authorizeHttpRequests(auth -> auth
-                // Public API endpoints
-                .requestMatchers("/api/auth/**").permitAll()
+                // Public auth endpoints (no authentication required)
+                .requestMatchers(
+                    "/api/auth/login",
+                    "/api/auth/register",
+                    "/api/auth/refresh",
+                    "/api/auth/forgot-password",
+                    "/api/auth/validate-reset-token",
+                    "/api/auth/reset-password",
+                    "/api/auth/send-otp",
+                    "/api/auth/verify-otp"
+                ).permitAll()
+                // Protected auth endpoints (require JWT authentication)
+                .requestMatchers("/api/auth/logout", "/api/auth/me").authenticated()
                 // Health checks for load balancers and Kubernetes probes
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                 // Swagger UI - access controlled by springdoc.swagger-ui.enabled property
                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                // Metrics endpoints require Basic Authentication
-                .requestMatchers("/actuator/prometheus", "/actuator/metrics", "/actuator/metrics/**").hasRole("METRICS")
-                // All other endpoints require authentication
+                // All other endpoints require JWT authentication
                 .anyRequest().authenticated()
             )
             // Security headers filter runs first to add headers to all responses
             .addFilterBefore(securityHeadersFilter, UsernamePasswordAuthenticationFilter.class)
             // Rate limiting filter runs early to block abusive requests
             .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
+            // JWT authentication filter for API endpoints
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

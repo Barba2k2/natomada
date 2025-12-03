@@ -36,6 +36,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // Skip JWT validation for public endpoints
         String path = request.getRequestURI();
+        log.debug("JwtFilter processing request: {} {}", request.getMethod(), path);
+
         if (path.startsWith("/v3/api-docs") ||
             path.startsWith("/swagger-ui") ||
             path.equals("/swagger-ui.html") ||
@@ -44,10 +46,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             path.startsWith("/actuator") ||
             path.equals("/api/auth/register") ||
             path.equals("/api/auth/login") ||
-            path.equals("/api/auth/refresh-token") ||
+            path.equals("/api/auth/refresh") ||
             path.equals("/api/auth/forgot-password") ||
             path.equals("/api/auth/validate-reset-token") ||
-            path.equals("/api/auth/reset-password")) {
+            path.equals("/api/auth/reset-password") ||
+            path.equals("/api/auth/send-otp") ||
+            path.equals("/api/auth/verify-otp")) {
+            log.debug("Skipping JWT validation for public endpoint: {}", path);
             filterChain.doFilter(request, response);
             return;
         }
@@ -57,6 +62,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (jwt != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 Long userId = jwtUtil.extractUserId(jwt);
+                log.debug("User ID from JWT: {}", userId);
 
                 if (!jwtUtil.isTokenExpired(jwt)) {
                     UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -68,10 +74,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     SecurityContextHolder.getContext().setAuthentication(authentication);
 
                     log.debug("JWT authentication successful for user: {}", userId);
+                } else {
+                    log.warn("JWT token is expired for user: {}", userId);
                 }
+            } else if (jwt == null) {
+                log.warn("No JWT token found in request to: {}", path);
             }
         } catch (Exception e) {
-            log.error("Cannot set user authentication: {}", e.getMessage());
+            log.error("Cannot set user authentication: {}", e.getMessage(), e);
         }
 
         filterChain.doFilter(request, response);

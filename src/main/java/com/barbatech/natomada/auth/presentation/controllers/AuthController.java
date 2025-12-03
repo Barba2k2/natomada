@@ -103,6 +103,9 @@ public class AuthController {
     })
     @PostMapping("/logout")
     public ResponseEntity<MessageResponseDto> logout(Authentication authentication) {
+        if (authentication == null) {
+            throw new IllegalStateException("Authentication is required for logout");
+        }
         Long userId = Long.parseLong(authentication.getName());
         MessageResponseDto response = authService.logout(userId);
         return ResponseEntity.ok(response);
@@ -110,7 +113,7 @@ public class AuthController {
 
     /**
      * Refresh access token
-     * POST /api/auth/refresh-token
+     * POST /api/auth/refresh
      */
     @Operation(
         summary = "Renovar token de acesso",
@@ -127,7 +130,7 @@ public class AuthController {
             description = "Refresh token inválido ou expirado"
         )
     })
-    @PostMapping("/refresh-token")
+    @PostMapping("/refresh")
     public ResponseEntity<LoginResponseDto> refreshToken(@Valid @RequestBody RefreshTokenRequestDto dto) {
         LoginResponseDto response = authService.refreshToken(dto.getRefreshToken());
         return ResponseEntity.ok(response);
