@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.*;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +19,7 @@ import java.util.List;
 /**
  * Controller for stations endpoints
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/stations")
 @RequiredArgsConstructor
@@ -86,21 +88,24 @@ public class StationsController {
     ) {
         Long userId = Long.parseLong(authentication.getName());
 
-        List<StationResponseDto> stations = stationsService.getNearbyStations(
+        StationsService.NearbyStationsResult result = stationsService.getNearbyStations(
             latitude, longitude, radius, limit, userId
         );
 
+        log.info("OCM Available: {}, Filters Available: {}", result.isOcmAvailable(), result.isOcmAvailable());
+
         return ResponseEntity.ok(NearbyStationsResponse.builder()
-            .data(stations)
+            .data(result.getStations())
             .meta(NearbyStationsResponse.MetaDto.builder()
-                .total(stations.size())
+                .total(result.getStations().size())
                 .latitude(latitude)
                 .longitude(longitude)
                 .radius(radius)
                 .sources(NearbyStationsResponse.SourcesDto.builder()
-                    .primary("OpenChargeMap")
-                    .enrichment("Google Places")
+                    .primary(result.isOcmAvailable() ? "OpenChargeMap" : "Google Places")
+                    .enrichment(result.isOcmAvailable() ? "Google Places" : null)
                     .build())
+                .filtersAvailable(result.isOcmAvailable())
                 .build())
             .build());
     }
@@ -132,6 +137,7 @@ public class StationsController {
             private Double longitude;
             private Integer radius;
             private SourcesDto sources;
+            private Boolean filtersAvailable;
         }
 
         @lombok.Data
