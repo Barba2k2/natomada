@@ -66,6 +66,78 @@ public class PlacesV1Response {
 
         @JsonProperty("websiteUri")
         private String websiteUri;
+
+        @JsonProperty("restroom")
+        private Boolean restroom;
+
+        @JsonProperty("parkingOptions")
+        private ParkingOptions parkingOptions;
+
+        @JsonProperty("paymentOptions")
+        private PaymentOptions paymentOptions;
+
+        @JsonProperty("accessibilityOptions")
+        private AccessibilityOptions accessibilityOptions;
+    }
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class ParkingOptions {
+        @JsonProperty("freeParking")
+        private Boolean freeParking;
+
+        @JsonProperty("paidParking")
+        private Boolean paidParking;
+
+        @JsonProperty("freeParkingLot")
+        private Boolean freeParkingLot;
+
+        @JsonProperty("paidParkingLot")
+        private Boolean paidParkingLot;
+
+        @JsonProperty("freeStreetParking")
+        private Boolean freeStreetParking;
+
+        @JsonProperty("paidStreetParking")
+        private Boolean paidStreetParking;
+
+        @JsonProperty("valetParking")
+        private Boolean valetParking;
+
+        @JsonProperty("freeGarageParking")
+        private Boolean freeGarageParking;
+
+        @JsonProperty("paidGarageParking")
+        private Boolean paidGarageParking;
+    }
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class PaymentOptions {
+        @JsonProperty("acceptsCreditCards")
+        private Boolean acceptsCreditCards;
+
+        @JsonProperty("acceptsDebitCards")
+        private Boolean acceptsDebitCards;
+
+        @JsonProperty("acceptsCashOnly")
+        private Boolean acceptsCashOnly;
+
+        @JsonProperty("acceptsNfc")
+        private Boolean acceptsNfc;
+    }
+
+    @Data
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class AccessibilityOptions {
+        @JsonProperty("wheelchairAccessibleParking")
+        private Boolean wheelchairAccessibleParking;
+
+        @JsonProperty("wheelchairAccessibleEntrance")
+        private Boolean wheelchairAccessibleEntrance;
+
+        @JsonProperty("wheelchairAccessibleRestroom")
+        private Boolean wheelchairAccessibleRestroom;
     }
 
     @Data
