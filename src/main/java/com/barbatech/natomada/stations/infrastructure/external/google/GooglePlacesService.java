@@ -45,7 +45,8 @@ public class GooglePlacesService {
     private static final String FIELD_MASK = "places.id,places.displayName,places.formattedAddress," +
         "places.location,places.rating,places.userRatingCount,places.types,places.primaryType," +
         "places.businessStatus,places.evChargeOptions,places.currentOpeningHours," +
-        "places.photos,places.internationalPhoneNumber,places.websiteUri";
+        "places.photos,places.internationalPhoneNumber,places.websiteUri," +
+        "places.restroom,places.parkingOptions,places.paymentOptions,places.accessibilityOptions";
 
     /**
      * Search for nearby EV charging stations
