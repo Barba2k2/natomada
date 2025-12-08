@@ -13,6 +13,8 @@ import com.barbatech.natomada.stations.infrastructure.repositories.FavoriteRepos
 import com.barbatech.natomada.stations.infrastructure.repositories.StationRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.Builder;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -59,7 +61,7 @@ public class StationsService {
         key = "#latitude.toString().substring(0, 6) + '_' + #longitude.toString().substring(0, 6) + '_' + #radius + '_' + #limit + '_' + (#userId != null ? #userId : 'anon')"
     )
     @Transactional
-    public List<StationResponseDto> getNearbyStations(
+    public NearbyStationsResult getNearbyStations(
         Double latitude,
         Double longitude,
         Integer radius,
@@ -70,6 +72,7 @@ public class StationsService {
                  latitude, longitude, radius, limit);
 
         List<Station> allStations = new ArrayList<>();
+        boolean ocmAvailable = false;
 
         // Step 1: Fetch from OpenChargeMap (primary source)
         try {
@@ -85,8 +88,12 @@ public class StationsService {
                 allStations.add(station);
             }
 
-            log.info("Fetched {} stations from OpenChargeMap", ocmStations.size());
+            // OCM is only truly available if it returned actual data
+            // Empty result likely means timeout/error without exception
+            ocmAvailable = !ocmStations.isEmpty();
+            log.info("Fetched {} stations from OpenChargeMap, OCM available: {}", ocmStations.size(), ocmAvailable);
         } catch (Exception e) {
+            ocmAvailable = false; // OCM failed
             log.error("Error fetching from OpenChargeMap: {}", e.getMessage(), e);
         }
 
@@ -101,9 +108,20 @@ public class StationsService {
             if (googleResponse.getPlaces() != null) {
                 log.info("Fetched {} places from Google Places v1", googleResponse.getPlaces().size());
 
-                // Try to match Google Places with OpenChargeMap stations by proximity
-                for (PlacesV1Response.Place place : googleResponse.getPlaces()) {
-                    matchAndEnrichStationV1(allStations, place);
+                // If OpenChargeMap returned stations, try to enrich them with Google data
+                if (!allStations.isEmpty()) {
+                    // Try to match Google Places with OpenChargeMap stations by proximity
+                    for (PlacesV1Response.Place place : googleResponse.getPlaces()) {
+                        matchAndEnrichStationV1(allStations, place);
+                    }
+                } else {
+                    // OpenChargeMap is down or returned no results - use Google Places as primary source
+                    log.info("No OpenChargeMap stations available, using Google Places as primary source");
+                    for (PlacesV1Response.Place place : googleResponse.getPlaces()) {
+                        Station station = externalStationMapper.fromGooglePlacesV1(place);
+                        allStations.add(station);
+                    }
+                    log.info("Created {} stations from Google Places v1", allStations.size());
                 }
             }
         } catch (Exception e) {
@@ -162,12 +180,19 @@ public class StationsService {
             savedStations = savedStations.subList(0, limit);
         }
 
-        log.info("Returning {} total stations ({} cached in database)", savedStations.size(),
-                 savedStations.stream().filter(s -> s.getId() != null).count());
+        log.info("Returning {} total stations ({} cached in database), OCM available: {}",
+                 savedStations.size(),
+                 savedStations.stream().filter(s -> s.getId() != null).count(),
+                 ocmAvailable);
 
-        return savedStations.stream()
+        List<StationResponseDto> stationDtos = savedStations.stream()
             .map(station -> mapToResponse(station, userId))
             .collect(Collectors.toList());
+
+        return NearbyStationsResult.builder()
+            .stations(stationDtos)
+            .ocmAvailable(ocmAvailable)
+            .build();
     }
 
     /**
@@ -571,5 +596,16 @@ public class StationsService {
             photoReference,
             googlePlacesApiKey
         );
+    }
+
+    /**
+     * Result wrapper for nearby stations search
+     * Includes whether OpenChargeMap is available for filtering
+     */
+    @Data
+    @Builder
+    public static class NearbyStationsResult {
+        private List<StationResponseDto> stations;
+        private boolean ocmAvailable;
     }
 }
