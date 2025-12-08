@@ -494,6 +494,221 @@ public class ExternalStationMapper {
     }
 
     /**
+     * Create a new Station entity from Google Places API v1 response
+     * Used as fallback when OpenChargeMap is unavailable
+     */
+    public Station fromGooglePlacesV1(PlacesV1Response.Place place) {
+        Station station = new Station();
+
+        // Initialize fields with database defaults
+        station.setRequiresMembership(false);
+        station.setPayAtLocation(false);
+        station.setRequiresAccessKey(false);
+        station.setIsOperational(true);
+        station.setIsOpen24h(false);
+        station.setIsRecentlyVerified(false);
+        station.setTotalConnectors(0);
+        station.setOcmReviewCount(0);
+        station.setGoogleReviewCount(0);
+        station.setTotalReviews(0);
+
+        // Google Place ID (use as primary identifier when no OCM data)
+        station.setGooglePlaceId(place.getId());
+
+        // Generate OCM-style ID from Google Place ID for consistency
+        // Format: "google_{first_8_chars}" to avoid conflicts
+        if (place.getId() != null && place.getId().length() >= 8) {
+            station.setOcmId("google_" + place.getId().substring(0, 8));
+        } else {
+            station.setOcmId("google_" + place.getId());
+        }
+
+        // Name
+        if (place.getDisplayName() != null) {
+            station.setName(place.getDisplayName().getText());
+        } else {
+            station.setName("Charging Station");
+        }
+
+        // Location
+        if (place.getLocation() != null) {
+            station.setLatitude(place.getLocation().getLatitude());
+            station.setLongitude(place.getLocation().getLongitude());
+        }
+
+        // Address
+        if (place.getFormattedAddress() != null) {
+            String[] addressParts = place.getFormattedAddress().split(", ");
+            if (addressParts.length > 0) {
+                station.setAddress(addressParts[0]);
+            }
+            if (addressParts.length > 1) {
+                station.setCity(addressParts[1]);
+            }
+            if (addressParts.length > 2) {
+                // Try to extract state and postal code
+                String lastPart = addressParts[addressParts.length - 1];
+                if (addressParts.length > 3) {
+                    station.setState(addressParts[2].replaceAll("[0-9-]", "").trim());
+                }
+                station.setCountry(lastPart);
+            }
+        }
+
+        // Contact info (if available in structured format)
+        if (place.getInternationalPhoneNumber() != null) {
+            station.setPhone(place.getInternationalPhoneNumber());
+        }
+
+        // Rating
+        if (place.getRating() != null) {
+            station.setGoogleRating(place.getRating());
+            station.setCombinedRating(place.getRating());
+        }
+        station.setGoogleReviewCount(place.getUserRatingCount() != null ? place.getUserRatingCount() : 0);
+        station.setTotalReviews(station.getGoogleReviewCount());
+
+        // Opening hours
+        if (place.getCurrentOpeningHours() != null && place.getCurrentOpeningHours().getWeekdayDescriptions() != null) {
+            OpeningHours openingHours = OpeningHours.builder()
+                .weekdayText(place.getCurrentOpeningHours().getWeekdayDescriptions())
+                .build();
+            station.setOpeningHours(openingHours);
+        }
+
+        // Photos
+        if (place.getPhotos() != null && !place.getPhotos().isEmpty()) {
+            try {
+                List<String> photoRefs = new ArrayList<>();
+                int maxPhotos = Math.min(place.getPhotos().size(), 5);
+                for (int i = 0; i < maxPhotos; i++) {
+                    PlacesV1Response.Photo photo = place.getPhotos().get(i);
+                    if (photo.getName() != null) {
+                        photoRefs.add(photo.getName());
+                    }
+                }
+                if (!photoRefs.isEmpty()) {
+                    station.setPhotoReferences(objectMapper.writeValueAsString(photoRefs));
+                }
+            } catch (JsonProcessingException e) {
+                log.error("Error converting photo references to JSON", e);
+            }
+        }
+
+        // Amenities - Extract from specific amenity fields
+        List<String> amenities = extractAmenitiesFromPlace(place);
+        if (!amenities.isEmpty()) {
+            station.setAmenities(amenities);
+        }
+
+        // EV Connector information
+        if (place.getEvChargeOptions() != null) {
+            station.setConnectors(mapGoogleEvConnectors(place.getEvChargeOptions()));
+
+            // Calculate total connectors
+            int totalCount = station.getConnectors().stream()
+                .mapToInt(c -> c.getQuantity() != null ? c.getQuantity() : 1)
+                .sum();
+            station.setTotalConnectors(totalCount);
+        } else {
+            station.setConnectors(new ArrayList<>());
+            station.setTotalConnectors(0);
+        }
+
+        // Metadata
+        station.setLastSyncAt(LocalDateTime.now());
+        station.setLastVerifiedAt(LocalDateTime.now());
+
+        log.info("Created new station from Google Places v1: {} ({} connectors)",
+            station.getName(), station.getTotalConnectors());
+
+        return station;
+    }
+
+    /**
+     * Map Google Places EV connector data to Connector value objects
+     */
+    private List<Connector> mapGoogleEvConnectors(PlacesV1Response.EVChargeOptions evOptions) {
+        List<Connector> connectors = new ArrayList<>();
+
+        if (evOptions.getConnectorAggregation() == null || evOptions.getConnectorAggregation().isEmpty()) {
+            return connectors;
+        }
+
+        for (PlacesV1Response.ConnectorAggregation connector : evOptions.getConnectorAggregation()) {
+            String normalizedType = normalizeConnectorType(connector.getType());
+
+            Connector newConnector = Connector.builder()
+                .type(normalizedType)
+                .power(connector.getMaxChargeRateKw())
+                .quantity(connector.getCount())
+                .isOperational(true)
+                .build();
+
+            connectors.add(newConnector);
+        }
+
+        return connectors;
+    }
+
+    /**
+     * Extract amenities from Google Places v1 specific amenity fields
+     */
+    private List<String> extractAmenitiesFromPlace(PlacesV1Response.Place place) {
+        List<String> amenities = new ArrayList<>();
+
+        // Restroom
+        if (Boolean.TRUE.equals(place.getRestroom())) {
+            amenities.add("restroom");
+        }
+
+        // Parking options
+        if (place.getParkingOptions() != null) {
+            PlacesV1Response.ParkingOptions parking = place.getParkingOptions();
+            if (Boolean.TRUE.equals(parking.getFreeParking()) ||
+                Boolean.TRUE.equals(parking.getFreeParkingLot()) ||
+                Boolean.TRUE.equals(parking.getFreeStreetParking()) ||
+                Boolean.TRUE.equals(parking.getFreeGarageParking())) {
+                amenities.add("free_parking");
+            } else if (Boolean.TRUE.equals(parking.getPaidParking()) ||
+                       Boolean.TRUE.equals(parking.getPaidParkingLot()) ||
+                       Boolean.TRUE.equals(parking.getPaidStreetParking()) ||
+                       Boolean.TRUE.equals(parking.getPaidGarageParking())) {
+                amenities.add("paid_parking");
+            }
+        }
+
+        // Payment options
+        if (place.getPaymentOptions() != null) {
+            PlacesV1Response.PaymentOptions payment = place.getPaymentOptions();
+            if (Boolean.TRUE.equals(payment.getAcceptsCreditCards())) {
+                amenities.add("credit_cards");
+            }
+            if (Boolean.TRUE.equals(payment.getAcceptsDebitCards())) {
+                amenities.add("debit_cards");
+            }
+            if (Boolean.TRUE.equals(payment.getAcceptsNfc())) {
+                amenities.add("contactless_payment");
+            }
+            if (Boolean.TRUE.equals(payment.getAcceptsCashOnly())) {
+                amenities.add("cash_only");
+            }
+        }
+
+        // Accessibility
+        if (place.getAccessibilityOptions() != null) {
+            PlacesV1Response.AccessibilityOptions accessibility = place.getAccessibilityOptions();
+            if (Boolean.TRUE.equals(accessibility.getWheelchairAccessibleParking()) ||
+                Boolean.TRUE.equals(accessibility.getWheelchairAccessibleEntrance()) ||
+                Boolean.TRUE.equals(accessibility.getWheelchairAccessibleRestroom())) {
+                amenities.add("wheelchair_accessible");
+            }
+        }
+
+        return amenities;
+    }
+
+    /**
      * Calculate combined rating from OCM and Google ratings
      */
     private void updateCombinedRating(Station station) {
