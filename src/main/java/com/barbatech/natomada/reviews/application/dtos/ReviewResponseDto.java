@@ -22,6 +22,9 @@ public class ReviewResponseDto {
     @JsonProperty("station_id")
     private Long stationId;
 
+    @JsonProperty("station_name")
+    private String stationName;
+
     @JsonProperty("user_id")
     private Long userId;
 

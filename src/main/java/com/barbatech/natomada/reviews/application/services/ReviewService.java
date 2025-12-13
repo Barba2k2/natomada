@@ -191,6 +191,7 @@ public class ReviewService {
         return ReviewResponseDto.builder()
             .id(review.getId())
             .stationId(review.getStation().getId())
+            .stationName(review.getStation().getName())
             .userId(review.getUser().getId())
             .userName(review.getUser().getName())
             .userProfileImage(review.getUser().getAvatarUrl())
