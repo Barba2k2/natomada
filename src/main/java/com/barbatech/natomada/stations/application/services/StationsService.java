@@ -13,8 +13,10 @@ import com.barbatech.natomada.stations.infrastructure.repositories.FavoriteRepos
 import com.barbatech.natomada.stations.infrastructure.repositories.StationRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -604,6 +606,8 @@ public class StationsService {
      */
     @Data
     @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
     public static class NearbyStationsResult {
         private List<StationResponseDto> stations;
         private boolean ocmAvailable;
