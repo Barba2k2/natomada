@@ -244,13 +244,25 @@ public class ExternalStationMapper {
             }
         }
 
-        // Extract amenities from types - Type-safe (Axel Engineering Doctrine)
+        // Extract amenities from types and specific fields - Type-safe (Axel Engineering Doctrine)
+        List<String> amenities = new ArrayList<>();
+
+        // First, extract from types (restaurant, cafe, parking, etc.)
         if (place.getTypes() != null && !place.getTypes().isEmpty()) {
-            List<String> amenities = amenityMapper.mapTypesToAmenities(place.getTypes());
-            if (!amenities.isEmpty()) {
-                station.setAmenities(amenities);  // Direct assignment
-                log.info("Extracted {} amenities for station {}: {}", amenities.size(), station.getName(), amenities);
+            amenities.addAll(amenityMapper.mapTypesToAmenities(place.getTypes()));
+        }
+
+        // Then extract from specific amenity fields (restroom, parkingOptions, paymentOptions, accessibilityOptions)
+        List<String> fieldAmenities = extractAmenitiesFromPlace(place);
+        for (String amenity : fieldAmenities) {
+            if (!amenities.contains(amenity)) {
+                amenities.add(amenity);
             }
+        }
+
+        if (!amenities.isEmpty()) {
+            station.setAmenities(amenities);
+            log.info("Extracted {} amenities for station {}: {}", amenities.size(), station.getName(), amenities);
         }
 
         // EV Connector information from Places API v1
