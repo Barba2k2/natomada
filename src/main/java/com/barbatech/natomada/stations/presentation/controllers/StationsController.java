@@ -84,12 +84,15 @@ public class StationsController {
 
         @Parameter(description = "Limite de resultados", example = "20")
         @RequestParam(required = false, defaultValue = "20")
-        @Min(value = 1) @Max(value = 1000) Integer limit
+        @Min(value = 1) @Max(value = 1000) Integer limit,
+
+        @Parameter(description = "Tipos de conectores a filtrar (AC, DC)", example = "AC,DC")
+        @RequestParam(required = false) List<String> connectorTypes
     ) {
         Long userId = Long.parseLong(authentication.getName());
 
         StationsService.NearbyStationsResult result = stationsService.getNearbyStations(
-            latitude, longitude, radius, limit, userId
+            latitude, longitude, radius, limit, userId, connectorTypes
         );
 
         log.info("OCM Available: {}, Filters Available: {}", result.isOcmAvailable(), result.isOcmAvailable());

@@ -3,6 +3,7 @@ package com.barbatech.natomada.stations.application.services;
 import com.barbatech.natomada.infrastructure.i18n.MessageSourceService;
 import com.barbatech.natomada.stations.application.dtos.StationResponseDto;
 import com.barbatech.natomada.stations.domain.entities.Station;
+import com.barbatech.natomada.stations.domain.valueobjects.Connector;
 import com.barbatech.natomada.stations.infrastructure.external.ExternalStationMapper;
 import com.barbatech.natomada.stations.infrastructure.external.google.GooglePlacesService;
 import com.barbatech.natomada.stations.infrastructure.external.google.dtos.GooglePlacesResponse;
@@ -60,7 +61,7 @@ public class StationsService {
      */
     @Cacheable(
         value = "nearby-stations",
-        key = "#latitude.toString().substring(0, 6) + '_' + #longitude.toString().substring(0, 6) + '_' + #radius + '_' + #limit + '_' + (#userId != null ? #userId : 'anon')"
+        key = "#latitude.toString().substring(0, 6) + '_' + #longitude.toString().substring(0, 6) + '_' + #radius + '_' + #limit + '_' + (#connectorTypes != null ? #connectorTypes.toString().hashCode() : 'all') + '_' + (#userId != null ? #userId : 'anon')"
     )
     @Transactional
     public NearbyStationsResult getNearbyStations(
@@ -68,7 +69,8 @@ public class StationsService {
         Double longitude,
         Integer radius,
         Integer limit,
-        Long userId
+        Long userId,
+        List<String> connectorTypes
     ) {
         log.info("Fetching nearby stations from external APIs: lat={}, lon={}, radius={}m, limit={}",
                  latitude, longitude, radius, limit);
@@ -182,12 +184,22 @@ public class StationsService {
             savedStations = savedStations.subList(0, limit);
         }
 
+        // Apply connector type filtering if specified
+        List<Station> filteredStations = savedStations;
+        if (connectorTypes != null && !connectorTypes.isEmpty()) {
+            filteredStations = savedStations.stream()
+                .filter(station -> hasMatchingConnectorType(station, connectorTypes))
+                .collect(Collectors.toList());
+            log.info("Applied connector type filter: {} -> {} stations",
+                     connectorTypes, filteredStations.size());
+        }
+
         log.info("Returning {} total stations ({} cached in database), OCM available: {}",
-                 savedStations.size(),
-                 savedStations.stream().filter(s -> s.getId() != null).count(),
+                 filteredStations.size(),
+                 filteredStations.stream().filter(s -> s.getId() != null).count(),
                  ocmAvailable);
 
-        List<StationResponseDto> stationDtos = savedStations.stream()
+        List<StationResponseDto> stationDtos = filteredStations.stream()
             .map(station -> mapToResponse(station, userId))
             .collect(Collectors.toList());
 
@@ -195,6 +207,49 @@ public class StationsService {
             .stations(stationDtos)
             .ocmAvailable(ocmAvailable)
             .build();
+    }
+
+    /**
+     * Check if station has at least one connector that matches the specified connector types
+     *
+     * @param station The station to check
+     * @param requestedTypes The requested connector types (AC, DC)
+     * @return True if the station has at least one matching connector, false otherwise
+     */
+    private boolean hasMatchingConnectorType(Station station, List<String> requestedTypes) {
+        if (station.getConnectors() == null || station.getConnectors().isEmpty()) {
+            return false;
+        }
+
+        for (Connector connector : station.getConnectors()) {
+            // Use current field which contains AC/DC info from OpenChargeMap
+            // e.g., "AC (Single-Phase)", "AC (Three-Phase)", "DC"
+            String currentType = connector.getCurrent();
+            if (currentType != null && !currentType.isEmpty()) {
+                String acDcType = extractAcDcFromCurrent(currentType);
+                if (requestedTypes.contains(acDcType)) {
+                    return true; // Found a matching connector type
+                }
+            }
+        }
+
+        return false; // No matching connectors found
+    }
+
+    /**
+     * Extract AC or DC from the current type field
+     * The current field contains values like "AC (Single-Phase)", "AC (Three-Phase)", "DC"
+     */
+    private String extractAcDcFromCurrent(String currentType) {
+        if (currentType == null || currentType.isEmpty()) {
+            return "DC"; // Default to DC if unknown
+        }
+
+        String typeLower = currentType.toLowerCase();
+        if (typeLower.startsWith("ac") || typeLower.contains("ac ")) {
+            return "AC";
+        }
+        return "DC";
     }
 
     /**
