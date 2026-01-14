@@ -4,10 +4,10 @@ import com.barbatech.natomada.reviews.application.exceptions.ReviewExpiredExcept
 import com.barbatech.natomada.reviews.application.exceptions.ReviewNotFoundException;
 import com.barbatech.natomada.subscriptions.application.exceptions.InvalidReceiptException;
 import com.barbatech.natomada.subscriptions.application.exceptions.ReceiptVerificationException;
-import org.springframework.context.MessageSource;
-import org.springframework.context.i18n.LocaleContextHolder;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import lombok.extern.slf4j.Slf4j;                                                                                 
+import org.springframework.context.MessageSource;                                                                 
+import org.springframework.web.multipart.MaxUploadSizeExceededException;                                          
+import org.springframework.web.multipart.MultipartException;                 
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -21,6 +21,7 @@ import java.util.Map;
 /**
  * Global exception handler for REST controllers
  */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -129,6 +130,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleReceiptVerification(ReceiptVerificationException ex) {
         String message = getMessage("subscription.verification.failed");
         return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, message);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        log.warn("File upload exceeded size limit: {}", ex.getMessage());
+        String message = getMessage("file.too.large");
+        return buildErrorResponse(HttpStatus.PAYLOAD_TOO_LARGE, message);
+    }
+
+    @ExceptionHandler(MultipartException.class)                                                                             
+    public ResponseEntity<ErrorResponse> handleMultipartException(MultipartException ex) {
+        log.warn("Multipart request failed: {}", ex.getMessage());
+        String message = getMessage("file.upload.interrupted");
+        return buildErrorResponse(HttpStatus.BAD_REQUEST, message);
     }
 
     private ResponseEntity<ErrorResponse> buildErrorResponse(HttpStatus status, String message) {
